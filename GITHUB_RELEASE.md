@@ -52,6 +52,10 @@ npx --yes github:harryrimPod/badodo-script run examples/door.bds
 .\bds.exe run examples/door.bds
 ```
 
+发布资产还包括 `badodo-script-<version>-windows-x64.zip`（Windows 零安装，内嵌
+Node.js 20+）和 `badodo-script-<version>-dist.zip`（Node 20+，包含 `dist/`、示例
+与 `wabt`）。完整校验和重建流程见 [`docs/distribution.md`](docs/distribution.md)。
+
 本地构建：
 
 ```powershell
@@ -132,6 +136,11 @@ Or download `bds.exe` from Assets:
 ```powershell
 .\bds.exe run examples/door.bds
 ```
+
+Assets also include `badodo-script-<version>-windows-x64.zip` (zero-install
+Windows CLI with embedded Node.js 20+) and `badodo-script-<version>-dist.zip`
+(Node 20+ with `dist/`, examples, and `wabt`). See
+[`docs/distribution.md`](docs/distribution.md) for checksums and rebuild steps.
 
 From source:
 

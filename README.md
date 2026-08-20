@@ -142,6 +142,10 @@ npx --yes github:harryrimPod/badodo-script run examples/door.bds
 .\bds.exe run examples/door.bds
 ```
 
+发布页同时提供 Windows 零安装包 `badodo-script-<version>-windows-x64.zip` 和
+包含 `dist/`、示例及 `wabt` 的 Node 分发包；资产校验与重建步骤见
+[`docs/distribution.md`](docs/distribution.md)。
+
 也可全局安装：
 
 ```bash

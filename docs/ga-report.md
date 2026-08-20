@@ -17,6 +17,14 @@
 - 安全：Ed25519 artifact、license 时间/feature、keyring 轮换、key/subject/artifact 吊销通过。
 - npm：tarball、隔离安装、CommonJS/ESM API、CLI、`init`、实际编译通过。
 
+## 分发复核（本轮修复）
+
+- `bds.exe` 已改为 Node SEA 单文件构建，内嵌 Node 24.16.0，满足项目声明的 Node.js 20+ 运行时契约。
+- `bds.exe doctor`、`run`、`compile`、`wasm`、`pack` 均在零安装目录通过；standalone 不再错误要求外部 `dist/lsp-cli.js`，LSP 边界以 INFO 明示。
+- `badodo-script-0.1.1-dist.zip` 已包含 `dist/`、示例、`wabt`、许可证和元数据，可在空目录中直接完成上述 CLI/WASM 流程。
+- 新增 `package:standalone`、`package:node-dist` 和 `test:standalone`，后续发布可重复构建并生成 `SHA256SUMS.txt`。
+- 当前本地 Windows 二进制未配置 Authenticode 证书；对外发布前应在企业发布流水线完成签名，再上传 GitHub Release。
+
 ## GA 边界
 
 GA-100 表示本报告中的 Badodo 引擎工具契约全部有自动化证据；不表示 BDS 成为任意 TypeScript、Go、C# 或 Godot API 的通用替代品。具体宿主 SDK 包装、联网授权服务、计费、客户账户和审计由 Badodo 引擎产品层实现。

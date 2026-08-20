@@ -295,15 +295,17 @@ function initProject(directory: string | undefined, force: boolean): void {
 
 function doctor(): void {
   const major = Number.parseInt(process.versions.node.split(".")[0] ?? "0", 10);
+  const standalone = ["bds.exe", "bds"].includes(path.basename(process.execPath).toLowerCase());
   const checks = [
     [major >= 20, `Node.js ${process.versions.node} (需要 >= 20)`],
-    [fs.existsSync(path.resolve(__dirname, "index.js")), "编译器 API dist/index.js"],
-    [fs.existsSync(path.resolve(__dirname, "cli.js")), "CLI dist/cli.js"],
-    [fs.existsSync(path.resolve(__dirname, "lsp-cli.js")), "LSP dist/lsp-cli.js"],
-    [fs.existsSync(path.resolve(__dirname, "godot.js")), "Godot bridge dist/godot.js"],
+    [standalone || fs.existsSync(path.resolve(__dirname, "index.js")), standalone ? "编译器 API（standalone 内嵌）" : "编译器 API dist/index.js"],
+    [standalone || fs.existsSync(path.resolve(__dirname, "cli.js")), standalone ? "CLI（standalone 内嵌）" : "CLI dist/cli.js"],
+    [standalone || fs.existsSync(path.resolve(__dirname, "godot.js")), standalone ? "Godot bridge（standalone 内嵌）" : "Godot bridge dist/godot.js"],
   ] as const;
   console.log(`Badodo Script ${BDS_VERSION}`);
   for (const [ok, label] of checks) console.log(`  ${ok ? "OK" : "FAIL"}  ${label}`);
+  if (standalone) console.log("  INFO  LSP CLI 作为独立 Node 包能力提供；standalone bds.exe 不内嵌 LSP 入口");
+  else console.log(`  ${fs.existsSync(path.resolve(__dirname, "lsp-cli.js")) ? "OK" : "FAIL"}  LSP dist/lsp-cli.js`);
   if (checks.some(([ok]) => !ok)) process.exitCode = 1;
 }
 

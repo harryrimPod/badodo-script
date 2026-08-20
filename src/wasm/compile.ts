@@ -1,8 +1,20 @@
-import wabt from "wabt";
 import * as AST from "../ast";
 import { generateWat } from "./wat-generator";
 import { tokenize } from "../lexer";
 import { parse } from "../parser";
+
+type WabtFactory = () => Promise<{
+  parseWat(name: string, source: string): { toBinary(options: Record<string, unknown>): { buffer: ArrayBuffer }; destroy(): void };
+}>;
+
+async function loadWabt(): Promise<WabtFactory> {
+  try {
+    const module = await import("wabt");
+    return module.default as unknown as WabtFactory;
+  } catch (error) {
+    throw new Error(`WASM 编译需要 wabt 依赖；请在项目中执行 npm install。${error instanceof Error ? ` 原因：${error.message}` : ""}`);
+  }
+}
 
 export interface WasmResult {
   binary: Uint8Array;
@@ -13,6 +25,7 @@ export interface WasmResult {
 /** Compile an AST into a .wasm binary (pure-compute functions only). */
 export async function compileAstToWasm(program: AST.Program): Promise<WasmResult> {
   const { wat, exported } = generateWat(program);
+  const wabt = await loadWabt();
   const wabtInstance = await wabt();
   const module = wabtInstance.parseWat("module.wat", wat);
   const binary = module.toBinary({}).buffer;

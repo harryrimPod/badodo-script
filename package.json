@@ -74,6 +74,10 @@
     "test:licensing": "node dist/licensing-test.js",
     "test:cli-sign": "node scripts/cli-sign-smoke.mjs",
     "test:cli-run": "node scripts/cli-run-smoke.mjs",
+    "test:standalone": "node scripts/standalone-smoke.mjs",
+    "build:standalone": "node scripts/build-standalone.mjs",
+    "package:standalone": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/package-standalone.ps1",
+    "package:node-dist": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/package-node-dist.ps1",
     "test:package": "node scripts/package-smoke.mjs",
     "test:examples": "node scripts/verify-examples.mjs",
     "test:browser": "node scripts/browser-smoke.mjs",
@@ -99,6 +103,7 @@
     "esbuild": "^0.28.2",
     "maplibre-gl": "4.7.1",
     "playwright": "1.62.1",
+    "postject": "1.0.0-alpha.6",
     "typescript": "^5.5.0"
   },
   "dependencies": {

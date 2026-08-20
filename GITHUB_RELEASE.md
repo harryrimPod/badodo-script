@@ -40,7 +40,23 @@ Badodo Script（简称 **BDS**，文件后缀 `.bds`）是一门面向 Web 3D �
 
 Go/C# 投影用于数据合同、服务适配和宿主桥接；任意 BDS 场景行为目前仍以 TypeScript/Web 运行时为主。
 
-### 快速开始
+### 快速开始（免编译，像 Python 一样）
+
+**`npx github:` 直跑（无需 npm 账号，免费）：**
+
+```powershell
+npx --yes github:harryrimPod/badodo-script run examples/door.bds
+```
+
+**`bds.exe` 单文件（无需安装 Node，像 `python.exe`，免费）：**
+从本页 Assets 下载 `bds.exe`：
+
+```powershell
+.\bds.exe --version
+.\bds.exe run examples/door.bds
+```
+
+**源码构建（贡献者）：**
 
 ```powershell
 npm install
@@ -113,7 +129,23 @@ The primary compilation pipeline is:
 
 Go and C# projections target data contracts, service adapters, and host bridges. Arbitrary BDS scene behavior currently runs primarily through the TypeScript/Web runtime.
 
-### Quick start
+### Quick start (no build — like Python)
+
+**`npx github:` (no npm account needed, free):**
+
+```bash
+npx --yes github:harryrimPod/badodo-script run examples/door.bds
+```
+
+**Standalone `bds.exe` (no Node install, like `python.exe`, free):**
+Download `bds.exe` from Assets on this page:
+
+```powershell
+.\bds.exe --version
+.\bds.exe run examples/door.bds
+```
+
+**From source (contributors):**
 
 ```bash
 npm install

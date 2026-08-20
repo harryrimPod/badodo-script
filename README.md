@@ -132,10 +132,32 @@ GA-100 验收边界与本轮证据见 [`docs/ga-contract.md`](docs/ga-contract.m
 
 ## 快速开始
 
-### 下载与使用（无需克隆仓库）
+### 免编译使用（无需 `npm run build`，像 Python 一样下载即用）
+
+**方法 1 — `npx github:` 直跑（无需 npm 账号，有 Node 即可，免费）：**
 
 ```bash
-# 直接运行最新发布版
+npx --yes github:harryrimPod/badodo-script --version
+npx --yes github:harryrimPod/badodo-script run examples/door.bds
+npx --yes github:harryrimPod/badodo-script compile examples/door.bds -o examples/door.ts
+```
+
+**方法 2 — 下载 `bds.exe` 单文件（无需安装 Node，像 `python.exe`，免费）：**
+
+从 [v0.1.1 Release](https://github.com/harryrimPod/badodo-script/releases/tag/v0.1.1) 下载 `bds.exe`（约 44MB，内置 Node）：
+
+```powershell
+.\bds.exe --version
+.\bds.exe run examples/door.bds
+.\bds.exe compile examples/door.bds --strict --nodes button,door,rotor --target web --emit-types
+```
+
+`bds.exe` 在 Windows 上无需任何依赖；`dist.zip` 解压后 `node dist/cli.js run` 亦可（需本地 Node >=20）。
+
+### npm 方式（可选，发包后）
+
+```bash
+# 直接运行最新发布版（需先 npm publish）
 npx badodo-script --version
 npx badodo-script init my-bds-project
 

@@ -1,0 +1,6 @@
+# 改变材质颜色
+when model.hover:
+    model.material.color = red
+
+when model.click:
+    model.material.color = green

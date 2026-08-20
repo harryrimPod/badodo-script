@@ -1,0 +1,1 @@
+{"version":3,"file":"animate.ts","sources":["animate.bds"],"sourcesContent":["# 动画：开门 + 相机切换\nwhen button.click:\n    animate door.y to 2 in 0.5\n\nwhen button_view.click:\n    animate camera to target in 1\n"],"names":[],"mappings":"AAEA;AACA;;AAEA;AACA"}

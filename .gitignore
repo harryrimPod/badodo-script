@@ -1,0 +1,16 @@
+node_modules/
+dist/
+*.tsbuildinfo
+*.bds.bin
+*.bds.signed.json
+bds-signing-*.pem
+*.wasm
+*.wasm.wat
+*.ts.map
+!examples/*.ts.map
+*.tgz
+.workbuddy/
+.tmp/
+# The full MapLibre provenance checkout is a local audit fixture. Keep the
+# small provenance record in the public repository without vendoring 133 MB.
+vendor/maplibre-gl-js/

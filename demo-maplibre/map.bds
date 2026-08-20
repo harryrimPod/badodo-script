@@ -1,0 +1,20 @@
+# 地图 IoT 演示脚本
+# 地图加载后定位，点击 marker 高亮并飞到对应位置
+# 温度数据实时绑定到地图图层颜色
+
+when map.load:
+    map.set_center([116.39, 39.9], 12)
+
+when sensor_a.click:
+    sensor_a.highlight()
+    map.fly_to([116.39, 39.90], 16)
+
+when sensor_b.click:
+    sensor_b.highlight()
+    map.fly_to([116.46, 39.92], 16)
+
+watch data.temperature:
+    if value > 80:
+        sensor_layer.set_color(color(255, 60, 60))
+    else:
+        sensor_layer.set_color(color(80, 180, 255))

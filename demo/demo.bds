@@ -1,0 +1,10 @@
+# Badodo Script 演示脚本
+# 点击立方体切换灯光，同时立方体持续旋转
+
+speed = 2
+
+when cube.click:
+    light.switch()
+
+every frame:
+    cube.rotate_y(speed * time)

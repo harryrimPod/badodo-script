@@ -1,0 +1,12 @@
+# 设备数据绑定
+temperature = 25
+pressure = 101
+
+bind temperature -> gauge_temperature.value
+bind pressure -> gauge_pressure.value
+
+watch temperature:
+    if value > 80:
+        alarm.on()
+    else:
+        alarm.off()

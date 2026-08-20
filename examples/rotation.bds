@@ -1,0 +1,8 @@
+# 控制电机旋转
+speed = 2
+
+when switch.click:
+    motor.start()
+
+every frame:
+    rotor.rotate_y(speed * time)

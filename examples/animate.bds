@@ -1,0 +1,6 @@
+# 动画：开门 + 相机切换
+when button.click:
+    animate door.y to 2 in 0.5
+
+when button_view.click:
+    animate camera to target in 1

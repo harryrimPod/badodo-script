@@ -1,0 +1,21 @@
+{
+  "name": "badodo-script-vscode",
+  "displayName": "Badodo Script",
+  "description": "Badodo Script syntax, completion, and hover support.",
+  "version": "0.1.0",
+  "publisher": "badodo",
+  "license": "MIT",
+  "engines": { "vscode": "^1.85.0" },
+  "categories": ["Programming Languages"],
+  "activationEvents": ["onLanguage:bds"],
+  "main": "./extension.js",
+  "contributes": {
+    "languages": [{ "id": "bds", "aliases": ["Badodo Script", "bds"], "extensions": [".bds"] }],
+    "configuration": {
+      "title": "Badodo Script",
+      "properties": {
+        "badodoScript.lspCommand": { "type": "string", "default": "bds-lsp", "description": "Badodo LSP executable." }
+      }
+    }
+  }
+}

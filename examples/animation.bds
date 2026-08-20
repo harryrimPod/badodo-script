@@ -1,0 +1,6 @@
+# 播放动画
+when button.click:
+    door.play_animation("open")
+
+when door.opened:
+    light.on()

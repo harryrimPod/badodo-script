@@ -1,0 +1,13 @@
+# 纯计算函数（可编译为 WASM）
+func compute(x, y):
+    return x * y + x
+
+func classify(v):
+    threshold = 80
+    if v > threshold:
+        return 1
+    else:
+        return 0
+
+func square(x):
+    return x * x

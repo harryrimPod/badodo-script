@@ -1,0 +1,6 @@
+# 显示与隐藏 UI 面板
+when button_settings.click:
+    panel_settings.show()
+
+when button_close.click:
+    panel_settings.hide()

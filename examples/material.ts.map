@@ -1,0 +1,1 @@
+{"version":3,"file":"material.ts","sources":["material.bds"],"sourcesContent":["# 改变材质颜色\nwhen model.hover:\n    model.material.color = red\n\nwhen model.click:\n    model.material.color = green\n"],"names":[],"mappings":"AAEA;AACA;;AAEA;AACA"}

@@ -1,0 +1,6 @@
+func blink_light(count):
+    repeat count:
+        light.on()
+        light.off()
+
+blink_light(3)

@@ -1,0 +1,1 @@
+{"version":3,"file":"door.ts","sources":["door.bds"],"sourcesContent":["speed = 5\nmax_temperature = 80\n\nwhen switch.click:\n    motor.start()\n\nif temperature > max_temperature:\n    motor.stop()\n    alarm.on()\nelse:\n    alarm.off()\n"],"names":[],"mappings":"AACA;AACA;AAEA;AACA;;AAEA;AACA;AACA;;AAEA"}

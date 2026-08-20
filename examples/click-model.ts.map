@@ -1,0 +1,1 @@
+{"version":3,"file":"click-model.ts","sources":["click-model.bds"],"sourcesContent":["# 点击模型切换灯光\nwhen model.click:\n    if light.on:\n        light.off()\n    else:\n        light.on()\n"],"names":[],"mappings":"AAEA;AACA;AACA;;AAEA"}

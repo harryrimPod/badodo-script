@@ -1,0 +1,106 @@
+{
+  "name": "badodo-script",
+  "version": "0.1.0",
+  "description": "Badodo Script compiler - transpiles to TypeScript",
+  "keywords": [
+    "badodo",
+    "bds",
+    "dsl",
+    "typescript",
+    "babylonjs",
+    "maplibre",
+    "godot"
+  ],
+  "license": "MIT",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "require": "./dist/index.js",
+      "default": "./dist/index.js"
+    },
+    "./package.json": "./package.json"
+  },
+  "bin": {
+    "bds": "./dist/cli.js",
+    "badodo-script": "./dist/cli.js",
+    "bds-lsp": "./dist/lsp-cli.js"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "files": [
+    "dist",
+    "README.md",
+    "overview.md",
+    "docs",
+    "LICENSE",
+    "CHANGELOG.md"
+  ],
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsc --watch",
+    "test": "node dist/test.js",
+    "pretest": "npm run build",
+    "test:runtime": "node dist/runtime-test.js",
+    "test:conformance": "node dist/conformance-test.js",
+    "test:types": "node dist/type-test.js",
+    "test:shared": "node dist/shared-test.js",
+    "test:shared-rc": "node dist/shared-rc-test.js",
+    "test:shared-csharp": "node dist/shared-csharp-test.js",
+    "test:shared-csharp-dotnet": "node scripts/verify-csharp.mjs",
+    "test:ingress": "node dist/ingress-test.js",
+    "test:server": "node dist/server-go-test.js",
+    "test:server-http": "node dist/server-go-http-test.js",
+    "test:server-http-go": "node scripts/verify-go-http.mjs",
+    "test:server-mqtt": "node dist/server-go-mqtt-test.js",
+    "test:server-mqtt-go": "node scripts/verify-go-mqtt.mjs",
+    "test:expressions": "node dist/expression-test.js",
+    "test:strict": "node dist/strict-compile-test.js",
+    "test:typed-ts": "node dist/typed-ts-test.js",
+    "test:language-ga": "node dist/language-ga-test.js",
+    "test:stdlib": "node dist/stdlib-test.js",
+    "test:lsp": "node dist/lsp-test.js",
+    "test:lsp-protocol": "node scripts/lsp-protocol-smoke.mjs",
+    "test:godot": "node dist/godot-test.js",
+    "test:godot-dotnet": "node scripts/verify-godot.mjs",
+    "ga:gate": "node scripts/ga-gate.mjs",
+    "lsp": "node dist/lsp-cli.js",
+    "test:production": "node dist/production-test.js",
+    "test:licensing": "node dist/licensing-test.js",
+    "test:cli-sign": "node scripts/cli-sign-smoke.mjs",
+    "test:package": "node scripts/package-smoke.mjs",
+    "test:examples": "node scripts/verify-examples.mjs",
+    "test:browser": "node scripts/browser-smoke.mjs",
+    "test:maplibre-browser": "node scripts/maplibre-browser-smoke.mjs",
+    "typecheck": "tsc --noEmit",
+    "verify": "npm run build && npm run bundle:all && npm run test:examples && npm run test:browser && npm run test:maplibre-browser && npm test && npm run test:runtime && npm run test:stdlib && npm run test:lsp && npm run test:lsp-protocol && npm run test:godot && npm run test:godot-dotnet && npm run test:wasm && npm run test:conformance && npm run test:types && npm run test:shared && npm run test:shared-rc && npm run test:shared-csharp && npm run test:shared-csharp-dotnet && npm run test:ingress && npm run test:server && npm run test:server-http && npm run test:server-http-go && npm run test:server-mqtt && npm run test:server-mqtt-go && npm run test:expressions && npm run test:strict && npm run test:typed-ts && npm run test:language-ga && npm run test:production && npm run test:licensing && npm run test:cli-sign && npm run test:package",
+    "prepack": "npm run build",
+    "compile": "node dist/cli.js",
+    "bundle": "esbuild src/runtime/browser.ts --bundle --format=iife --global-name=Badodo --platform=browser --outfile=demo/badodo-runtime.js",
+    "bundle:maplibre": "esbuild src/runtime/browser.ts --bundle --format=iife --global-name=Badodo --platform=browser --outfile=demo-maplibre/badodo-runtime.js",
+    "bundle:editor": "esbuild src/editor/compiler-browser.ts --bundle --format=iife --global-name=BDSCompiler --platform=browser --outfile=demo-editor/bds-compiler.js",
+    "bundle:all": "npm run bundle && npm run bundle:maplibre && npm run bundle:editor",
+    "bundle:babylon": "node scripts/build-babylon-fixture.mjs",
+    "demo": "npm run build && npm run bundle && node dist/cli.js pack demo/demo.bds -k my-secret-key-2026",
+    "demo:maplibre": "npm run build && npm run bundle:maplibre && node dist/cli.js pack demo-maplibre/map.bds -k my-secret-key-2026",
+    "demo:editor": "npm run build && npm run bundle:editor",
+    "test:wasm": "node dist/wasm-test.js"
+  },
+  "devDependencies": {
+    "@babylonjs/core": "9.20.0",
+    "@babylonjs/loaders": "9.20.0",
+    "@types/node": "^26.2.0",
+    "esbuild": "^0.28.2",
+    "maplibre-gl": "4.7.1",
+    "playwright": "1.62.1",
+    "typescript": "^5.5.0"
+  },
+  "dependencies": {
+    "wabt": "^1.0.39"
+  }
+}

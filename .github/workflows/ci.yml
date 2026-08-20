@@ -1,0 +1,32 @@
+name: BDS CI
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    env:
+      BDS_REQUIRE_BROWSER: "1"
+    strategy:
+      matrix:
+        node-version: [20.x, 22.x]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node-version }}
+          cache: npm
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.22.x"
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "8.0.x"
+      - run: npm ci
+      # Browser smoke tests use real Chromium/WebGL2 instead of a fake runtime.
+      - run: npx playwright install --with-deps chromium
+      - run: npm run verify
+      - run: npm pack --dry-run

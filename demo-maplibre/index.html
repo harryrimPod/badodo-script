@@ -1,0 +1,134 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Badodo Script — MapLibre GL JS Demo</title>
+  <link rel="stylesheet" href="https://unpkg.com/maplibre-gl@4/dist/maplibre-gl.css">
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    html, body { width: 100%; height: 100%; overflow: hidden; background: #0b0e14; }
+    #map { position: absolute; inset: 0; }
+
+    #hud {
+      position: absolute; top: 16px; left: 16px; z-index: 10;
+      font-family: "SF Mono", Consolas, monospace;
+      color: #d7e0f0; background: rgba(20, 24, 34, 0.9);
+      border: 1px solid rgba(120, 140, 170, 0.25);
+      border-radius: 10px; padding: 14px 16px; font-size: 13px;
+      line-height: 1.6; max-width: 380px; backdrop-filter: blur(6px);
+    }
+    #hud .title { font-size: 15px; font-weight: 700; color: #7fd4ff; margin-bottom: 6px; }
+    #hud code { color: #ffd580; }
+    #status { position: absolute; bottom: 16px; left: 16px; right: 16px; z-index: 10;
+      font-family: "SF Mono", Consolas, monospace; font-size: 12px; color: #8ea0b8; }
+  </style>
+</head>
+<body>
+  <div id="map"></div>
+
+  <div id="hud">
+    <div class="title">Badodo Script 驱动地图</div>
+    <div>脚本：<code>map.bds</code>（AES-256 加密加载）</div>
+    <div>点击传感器 marker → 高亮 + 相机飞过去</div>
+  </div>
+
+  <div id="status">正在初始化…</div>
+
+  <script src="https://unpkg.com/maplibre-gl@4/dist/maplibre-gl.js"></script>
+  <script src="./badodo-runtime.js"></script>
+  <script>
+    (async function () {
+      const status = document.getElementById("status");
+      const log = (msg) => { status.textContent = msg; };
+
+      const map = new maplibregl.Map({
+        container: "map",
+        style: "https://demotiles.maplibre.org/style.json",
+        center: [116.39, 39.9],
+        zoom: 5,
+      });
+
+      // 等待地图加载
+      await new Promise((resolve) => map.on("load", resolve));
+
+      // 创建两个传感器 marker
+      function makeMarker(color) {
+        const el = document.createElement("div");
+        el.style.width = "18px";
+        el.style.height = "18px";
+        el.style.borderRadius = "50%";
+        el.style.background = color;
+        el.style.border = "2px solid #fff";
+        el.style.cursor = "pointer";
+        return new maplibregl.Marker({ element: el })
+          .setLngLat([116.39, 39.9])
+          .addTo(map);
+      }
+      const markerA = makeMarker("#4da3ff");
+      const markerB = makeMarker("#ff7d4d");
+      markerB.setLngLat([116.46, 39.92]);
+
+      // 添加一个数据图层（circle），用于实时数据可视化
+      map.addSource("sensor-points", {
+        type: "geojson",
+        data: {
+          type: "FeatureCollection",
+          features: [
+            { type: "Feature", geometry: { type: "Point", coordinates: [116.39, 39.9] } },
+            { type: "Feature", geometry: { type: "Point", coordinates: [116.46, 39.92] } },
+          ],
+        },
+      });
+      map.addLayer({
+        id: "sensor-layer",
+        type: "circle",
+        source: "sensor-points",
+        paint: { "circle-radius": 12, "circle-color": "rgb(80,180,255)", "circle-opacity": 0.7 },
+      });
+
+      // ---- 用适配器把地图对象包装成 Badodo 节点 ----
+      const rt = new Badodo.BadodoRuntime();
+      const mapNode = Badodo.createMapNode(map);
+      const sensorA = Badodo.createMarkerNode(markerA);
+      const sensorB = Badodo.createMarkerNode(markerB);
+      const sensorLayer = Badodo.createCircleLayerNode(map, "sensor-layer");
+      const data = { temperature: 25 };  // 数据源节点
+
+      rt.registerNode("map", mapNode);
+      rt.registerNode("sensor_a", sensorA);
+      rt.registerNode("sensor_b", sensorB);
+      rt.registerNode("sensor_layer", sensorLayer);
+      rt.registerNode("data", data);
+
+      // 桥接原生事件到 Badodo 事件系统
+      Badodo.bridgeMapEvents(map, mapNode, rt);
+      Badodo.bridgeMarkerClick(markerA, sensorA, rt);
+      Badodo.bridgeMarkerClick(markerB, sensorB, rt);
+
+      // 模拟设备数据变化，驱动 watch 数据绑定
+      let temp = 25;
+      setInterval(() => {
+        temp = temp > 80 ? 25 : temp + 15;   // 温度循环波动
+        data.temperature = temp;
+        log(`温度: ${temp}°C`);
+      }, 2000);
+
+      // 每帧驱动 Badodo 运行时（watch 轮询）
+      function frame() {
+        rt.tick(0.016);
+        requestAnimationFrame(frame);
+      }
+      requestAnimationFrame(frame);
+
+      // ---- 加载并运行加密脚本 ----
+      const KEY = "my-secret-key-2026";
+      await Badodo.runEncrypted(rt, "./map.bds.bin", KEY);
+      rt.emit(mapNode, "load");   // 地图已加载，补发 load 事件触发 when map.load
+      log("脚本已加载并运行（MapLibre GL JS）");
+    })().catch((err) => {
+      document.getElementById("status").textContent = "运行出错：" + err.message;
+    });
+  </script>
+</body>
+</html>

@@ -1,0 +1,1 @@
+{"version":3,"file":"wasm-calc.ts","sources":["wasm-calc.bds"],"sourcesContent":["# 纯计算函数（可编译为 WASM）\nfunc compute(x, y):\n    return x * y + x\n\nfunc classify(v):\n    threshold = 80\n    if v > threshold:\n        return 1\n    else:\n        return 0\n\nfunc square(x):\n    return x * x\n"],"names":[],"mappings":"AAEA;AACA;;AAEA;AACA;AACA;AACA;;AAEA;;;AAEA;AACA"}

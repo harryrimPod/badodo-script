@@ -1,0 +1,1 @@
+{"version":3,"file":"camera.ts","sources":["camera.bds"],"sourcesContent":["# 相机切换\nwhen button_front.click:\n    camera.look_at(product)\n\nwhen button_top.click:\n    camera.move_to(top_view)\n"],"names":[],"mappings":"AAEA;AACA;;AAEA;AACA"}

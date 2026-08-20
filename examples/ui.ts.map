@@ -1,0 +1,1 @@
+{"version":3,"file":"ui.ts","sources":["ui.bds"],"sourcesContent":["# 显示与隐藏 UI 面板\nwhen button_settings.click:\n    panel_settings.show()\n\nwhen button_close.click:\n    panel_settings.hide()\n"],"names":[],"mappings":"AAEA;AACA;;AAEA;AACA"}

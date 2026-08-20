@@ -1,0 +1,6 @@
+# 点击模型切换灯光
+when model.click:
+    if light.on:
+        light.off()
+    else:
+        light.on()

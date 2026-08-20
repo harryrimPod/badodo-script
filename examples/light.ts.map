@@ -1,0 +1,1 @@
+{"version":3,"file":"light.ts","sources":["light.bds"],"sourcesContent":["func blink_light(count):\n    repeat count:\n        light.on()\n        light.off()\n\nblink_light(3)\n"],"names":[],"mappings":"AACA;AACA;AACA;AACA;;;AAEA"}

@@ -1,0 +1,1 @@
+{"version":3,"file":"data-binding.ts","sources":["data-binding.bds"],"sourcesContent":["# 设备数据绑定\ntemperature = 25\npressure = 101\n\nbind temperature -> gauge_temperature.value\nbind pressure -> gauge_pressure.value\n\nwatch temperature:\n    if value > 80:\n        alarm.on()\n    else:\n        alarm.off()\n"],"names":[],"mappings":"AAEA;AACA;AAEA;AACA;AAEA;AACA;AACA;;AAEA"}

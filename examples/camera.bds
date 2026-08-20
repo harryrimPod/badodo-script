@@ -1,0 +1,6 @@
+# 相机切换
+when button_front.click:
+    camera.look_at(product)
+
+when button_top.click:
+    camera.move_to(top_view)

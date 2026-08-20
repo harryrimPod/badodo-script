@@ -1,0 +1,1 @@
+{"version":3,"file":"animation.ts","sources":["animation.bds"],"sourcesContent":["# 播放动画\nwhen button.click:\n    door.play_animation(\"open\")\n\nwhen door.opened:\n    light.on()\n"],"names":[],"mappings":"AAEA;AACA;;AAEA;AACA"}

@@ -1,0 +1,1 @@
+{"version":3,"file":"rotation.ts","sources":["rotation.bds"],"sourcesContent":["# 控制电机旋转\nspeed = 2\n\nwhen switch.click:\n    motor.start()\n\nevery frame:\n    rotor.rotate_y(speed * time)\n"],"names":[],"mappings":"AAEA;AAEA;AACA;;AAEA;AACA"}

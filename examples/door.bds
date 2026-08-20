@@ -1,0 +1,11 @@
+speed = 5
+max_temperature = 80
+
+when switch.click:
+    motor.start()
+
+if temperature > max_temperature:
+    motor.stop()
+    alarm.on()
+else:
+    alarm.off()

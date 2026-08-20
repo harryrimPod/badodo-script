@@ -1,0 +1,192 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Badodo Script — 在线编辑器</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    html, body { width: 100%; height: 100%; background: #1e1e1e; overflow: hidden; font-family: -apple-system, "Segoe UI", sans-serif; }
+    #toolbar {
+      display: flex; align-items: center; gap: 12px;
+      padding: 10px 16px; background: #2d2d30; border-bottom: 1px solid #3e3e42;
+      color: #d7d7d7; font-size: 13px;
+    }
+    #toolbar .title { font-weight: 700; color: #7fd4ff; font-size: 14px; margin-right: 8px; }
+    #toolbar button {
+      background: #0e639c; color: #fff; border: none; border-radius: 4px;
+      padding: 6px 14px; font-size: 13px; cursor: pointer;
+    }
+    #toolbar button:hover { background: #1177bb; }
+    #toolbar .hint { color: #8a8a8a; font-size: 12px; margin-left: auto; }
+    #main { display: flex; width: 100%; height: calc(100% - 45px); }
+    #editor { flex: 1; min-width: 0; }
+    #output {
+      flex: 1; min-width: 0; border-left: 1px solid #3e3e42; display: flex; flex-direction: column;
+    }
+    #output .label {
+      padding: 8px 12px; background: #252526; color: #8a8a8a;
+      font-size: 12px; border-bottom: 1px solid #3e3e42;
+    }
+    #ts {
+      flex: 1; margin: 0; padding: 12px; background: #1e1e1e; color: #d4d4d4;
+      font-family: Consolas, monospace; font-size: 13px; line-height: 1.5; overflow: auto;
+      white-space: pre;
+    }
+  </style>
+</head>
+<body>
+  <div id="toolbar">
+    <span class="title">Badodo Script</span>
+    <span>在线编辑器（语法高亮 · 自动补全 · 悬停解释）</span>
+    <button id="compile">编译为 TypeScript</button>
+    <span class="hint">输入 `if`、`when`、`func` 试试自动补全</span>
+  </div>
+  <div id="main">
+    <div id="editor"></div>
+    <div id="output">
+      <div class="label">编译结果（TypeScript）</div>
+      <pre id="ts">// 点击「编译为 TypeScript」查看结果</pre>
+    </div>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/monaco-editor@0.45.0/min/vs/loader.js"></script>
+  <script src="./bds-compiler.js"></script>
+  <script>
+    require.config({ paths: { vs: "https://cdn.jsdelivr.net/npm/monaco-editor@0.45.0/min/vs" } });
+    require(["vs/editor/editor.main"], function () {
+      const KEYWORDS = ["if","else","repeat","func","return","when","bind","watch","every","animate","to","in","for"];
+      const BUILTINS = ["true","false","null","vec3","color"];
+
+      // ---- 注册语言 ----
+      monaco.languages.register({ id: "bds" });
+      monaco.languages.setLanguageConfiguration("bds", {
+        comments: { lineComment: "#" },
+        brackets: [["(", ")"], ["[", "]"]],
+        autoClosingPairs: [
+          { open: "(", close: ")" },
+          { open: "[", close: "]" },
+          { open: '"', close: '"' },
+        ],
+      });
+      monaco.languages.setMonarchTokensProvider("bds", {
+        keywords: KEYWORDS,
+        builtins: BUILTINS,
+        tokenizer: {
+          root: [
+            [/#.*$/, "comment"],
+            [/"(?:[^"\\]|\\.)*"/, "string"],
+            [/\b\d+(\.\d+)?\b/, "number"],
+            [/[a-zA-Z_][a-zA-Z0-9_]*/, { cases: { "@keywords": "keyword", "@builtins": "type", "@default": "identifier" } }],
+            [/->/, "operator"],
+            [/[+\-*/<>=!]+/, "operator"],
+            [/[()[\],:.]/, "delimiter"],
+          ],
+        },
+      });
+
+      // ---- 中文文档 ----
+      const DOCS = {
+        if: "如果条件成立，执行下面的代码块。\n\n示例：\nif temperature > 80:\n    alarm.on()",
+        else: "否则（if 条件不成立时）执行。\n\n示例：\nelse:\n    alarm.off()",
+        repeat: "重复执行 N 次。\n\n示例：\nrepeat 3:\n    light.blink()",
+        func: "定义一个函数。\n\n示例：\nfunc add(a, b):\n    return a + b",
+        return: "返回一个值（结束函数）。",
+        when: "当某个事件发生时执行。\n\n示例：\nwhen button.click:\n    door.open()",
+        bind: "把数据绑定到节点属性。\n\n示例：\nbind temperature -> gauge.value",
+        watch: "监测数据，值变化时执行。\n\n示例：\nwatch temperature:\n    if value > 80:\n        alarm.on()",
+        every: "每帧执行（配合 frame）。\n\n示例：\nevery frame:\n    rotor.rotate_y(speed * time)",
+        animate: "动画：属性补间。\n\n示例：\nanimate door.y to 2 in 0.5",
+        to: "animate 的目标值。",
+        in: "animate 的时长 / for 循环的 in。",
+        for: "遍历数组。\n\n示例：\nfor item in items:\n    light.blink(item)",
+        true: "布尔值：真",
+        false: "布尔值：假",
+        null: "空值",
+        vec3: "三维向量，返回 { x, y, z }。\n\n示例：\npos = vec3(1, 2, 3)",
+        color: "颜色，返回 { r, g, b }（0-255）。\n\n示例：\nred = color(255, 0, 0)",
+      };
+
+      // ---- 自动补全 ----
+      monaco.languages.registerCompletionItemProvider("bds", {
+        provideCompletionItems(model, position) {
+          const word = model.getWordUntilPosition(position);
+          const range = {
+            startLineNumber: position.lineNumber,
+            endLineNumber: position.lineNumber,
+            startColumn: word.startColumn,
+            endColumn: word.endColumn,
+          };
+          const suggestions = [
+            { label: "if", insertText: "if ${1:condition}:\n    ${2:action}", insertTextRules: monaco.languages.CompletionItemInsertTextRule.InsertAsSnippet, kind: monaco.languages.CompletionItemKind.Snippet, documentation: DOCS.if, range },
+            { label: "else", insertText: "else:\n    ${1:action}", insertTextRules: monaco.languages.CompletionItemInsertTextRule.InsertAsSnippet, kind: monaco.languages.CompletionItemKind.Snippet, documentation: DOCS.else, range },
+            { label: "repeat", insertText: "repeat ${1:3}:\n    ${2:action}", insertTextRules: monaco.languages.CompletionItemInsertTextRule.InsertAsSnippet, kind: monaco.languages.CompletionItemKind.Snippet, documentation: DOCS.repeat, range },
+            { label: "func", insertText: "func ${1:name}(${2}):\n    ${3:action}", insertTextRules: monaco.languages.CompletionItemInsertTextRule.InsertAsSnippet, kind: monaco.languages.CompletionItemKind.Snippet, documentation: DOCS.func, range },
+            { label: "return", insertText: "return ${1:value}", insertTextRules: monaco.languages.CompletionItemInsertTextRule.InsertAsSnippet, kind: monaco.languages.CompletionItemKind.Snippet, documentation: DOCS.return, range },
+            { label: "when", insertText: "when ${1:node}.${2:event}:\n    ${3:action}", insertTextRules: monaco.languages.CompletionItemInsertTextRule.InsertAsSnippet, kind: monaco.languages.CompletionItemKind.Snippet, documentation: DOCS.when, range },
+            { label: "bind", insertText: "bind ${1:data} -> ${2:node}.${3:prop}", insertTextRules: monaco.languages.CompletionItemInsertTextRule.InsertAsSnippet, kind: monaco.languages.CompletionItemKind.Snippet, documentation: DOCS.bind, range },
+            { label: "watch", insertText: "watch ${1:data}:\n    ${2:action}", insertTextRules: monaco.languages.CompletionItemInsertTextRule.InsertAsSnippet, kind: monaco.languages.CompletionItemKind.Snippet, documentation: DOCS.watch, range },
+            { label: "every frame", insertText: "every frame:\n    ${1:action}", insertTextRules: monaco.languages.CompletionItemInsertTextRule.InsertAsSnippet, kind: monaco.languages.CompletionItemKind.Snippet, documentation: DOCS.every, range },
+            { label: "animate", insertText: "animate ${1:node}.${2:prop} to ${3:value} in ${4:duration}", insertTextRules: monaco.languages.CompletionItemInsertTextRule.InsertAsSnippet, kind: monaco.languages.CompletionItemKind.Snippet, documentation: DOCS.animate, range },
+            { label: "for", insertText: "for ${1:item} in ${2:items}:\n    ${3:action}", insertTextRules: monaco.languages.CompletionItemInsertTextRule.InsertAsSnippet, kind: monaco.languages.CompletionItemKind.Snippet, documentation: DOCS.for, range },
+            { label: "vec3", insertText: "vec3(${1:x}, ${2:y}, ${3:z})", insertTextRules: monaco.languages.CompletionItemInsertTextRule.InsertAsSnippet, kind: monaco.languages.CompletionItemKind.Function, documentation: DOCS.vec3, range },
+            { label: "color", insertText: "color(${1:r}, ${2:g}, ${3:b})", insertTextRules: monaco.languages.CompletionItemInsertTextRule.InsertAsSnippet, kind: monaco.languages.CompletionItemKind.Function, documentation: DOCS.color, range },
+          ];
+          return { suggestions };
+        },
+      });
+
+      // ---- 悬停解释 ----
+      monaco.languages.registerHoverProvider("bds", {
+        provideHover(model, position) {
+          const word = model.getWordAtPosition(position);
+          if (!word) return null;
+          const doc = DOCS[word.word];
+          if (!doc) return null;
+          return { contents: [{ value: "**" + word.word + "**\n\n" + doc }] };
+        },
+      });
+
+      // ---- 编辑器 ----
+      const defaultValue = [
+        "# Badodo Script 演示",
+        "speed = 2",
+        "max_temperature = 80",
+        "",
+        "when button.click:",
+        "    door.open()",
+        "",
+        "if temperature > max_temperature:",
+        "    alarm.on()",
+        "else:",
+        "    alarm.off()",
+        "",
+        "every frame:",
+        "    rotor.rotate_y(speed * time)",
+        "",
+      ].join("\n");
+
+      const editor = monaco.editor.create(document.getElementById("editor"), {
+        value: defaultValue,
+        language: "bds",
+        theme: "vs-dark",
+        fontSize: 14,
+        minimap: { enabled: false },
+        automaticLayout: true,
+      });
+
+      // ---- 编译按钮 ----
+      document.getElementById("compile").addEventListener("click", () => {
+        const source = editor.getValue();
+        const out = document.getElementById("ts");
+        try {
+          const result = BDSCompiler.compile(source, "demo.bds");
+          out.textContent = result.typescript;
+        } catch (e) {
+          out.textContent = "编译错误：\n" + (e.message || e);
+        }
+      });
+    });
+  </script>
+</body>
+</html>

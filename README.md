@@ -150,6 +150,7 @@ npm run compile
 ```bash
 npm install --global badodo-script
 bds compile main.bds --strict --nodes button,door,rotor --target web --emit-types
+bds run main.bds --nodes button,door,rotor --target web
 ```
 
 ### 安装依赖
@@ -192,7 +193,12 @@ npx badodo-script --version
 npm run build          # 编译编译器
 node dist/cli.js examples/door.bds          # 输出 examples/door.ts + .ts.map
 node dist/cli.js compile examples/door.bds  # 同上
+node dist/cli.js run examples/door.bds      # Node 侧注入本地运行时并执行
 ```
+
+`bds run` 会自动从 AST 收集场景节点并注册本地 fixture 节点；也可以用
+`--nodes`、`--target` 和 `--emit-types` 透传运行配置。它适合脚本逻辑和
+运行时 smoke，不替代 Babylon.js/MapLibre 的真实宿主场景。
 
 ### 编译纯计算函数 → WASM 二进制
 
@@ -233,6 +239,7 @@ npm run test:lsp-protocol # LSP JSON-RPC 协议 smoke
 npm run test:godot-dotnet # Godot runtime bridge 的真实 .NET 编译/运行
 npm run ga:gate         # GA-100 静态发布契约门禁
 npm run test:cli-sign    # CLI keygen/pack/sign/verify 与篡改拒绝测试
+npm run test:cli-run     # bds run 默认、节点/target/type 参数和失败退出测试
 npm run test:package    # npm pack/隔离安装/API/CLI/脚手架发行验证
 npm run test:browser    # Chromium 本地浏览器 smoke（WebGL2/加密执行/适配器）
 npm run test:maplibre-browser # MapLibre GL JS 真实本地 style/交互 smoke

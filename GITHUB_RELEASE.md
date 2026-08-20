@@ -54,13 +54,13 @@ npx bds compile examples/animate.bds -o examples/animate.ts
 npm run verify
 ```
 
-当前发布基线为 **0.1.0 GA-100 技术交付候选**。GA-100 表示 Badodo 引擎工具边界内的技术契约已具备自动化证据，不表示已经完成 GitHub/npm 公开发布。
+当前发布基线为 **0.1.0 GA-100**，已在 GitHub 公开发布（`harryrimPod/badodo-script`）。GA-100 表示 Badodo 引擎工具边界内的技术契约已具备自动化证据；npm 发布为可选后续步骤。
 
 ### 项目状态
 
-- 本地构建、TypeScript 编译、Chromium + Babylon WebGL2、MapLibre WebGL2、Go、.NET、Godot、LSP、WASM 和 npm 隔离安装验证已通过。
-- GitHub 远程仓库、远端 CI 和 npm provenance 发布需要在目标账户中配置后执行。
-- API、适配器和打包格式仍遵循 `0.1.x` 预览版兼容策略。
+- 本地构建、TypeScript 编译、Chromium + Babylon WebGL2、MapLibre WebGL2、Go、.NET、Godot、LSP、WASM 和 npm 隔离安装验证已通过；远端 GitHub Actions CI 已绿。
+- GitHub 已公开：`https://github.com/harryrimPod/badodo-script`（`main` + `v0.1.0` Release）。
+- npm 公开发布为可选后续步骤；API、适配器和打包格式仍遵循 `0.1.x` 预览版兼容策略。
 
 ### 许可证
 
@@ -123,13 +123,13 @@ Run the complete local verification suite:
 npm run verify
 ```
 
-The current release baseline is **0.1.0 GA-100 technical delivery candidate**. GA-100 means that the bounded Badodo engine-tool contract has repeatable technical evidence; it does not mean that the package has already been publicly released on GitHub or npm.
+The current release baseline is **0.1.0 GA-100**, published on GitHub (`harryrimPod/badodo-script`). GA-100 means the bounded Badodo engine-tool contract has repeatable technical evidence; npm publication is an optional next step.
 
 ### Project status
 
-- Local TypeScript, Chromium + Babylon WebGL2, MapLibre WebGL2, Go, .NET, Godot, LSP, WASM, and isolated npm-install checks are passing.
-- A GitHub remote, remote CI run, and npm provenance publication must be configured in the target accounts before public release.
-- APIs, adapters, and packaging formats follow the `0.1.x` preview compatibility policy.
+- Local TypeScript, Chromium + Babylon WebGL2, MapLibre WebGL2, Go, .NET, Godot, LSP, WASM, and isolated npm-install checks are passing; remote GitHub Actions CI is green.
+- GitHub is public: `https://github.com/harryrimPod/badodo-script` (`main` + `v0.1.0` Release).
+- npm publication is optional; APIs, adapters, and packaging formats follow the `0.1.x` preview compatibility policy.
 
 ### License
 
@@ -157,7 +157,7 @@ Babylon.js, MapLibre GL JS, TypeScript, Playwright, esbuild, WABT, and other thi
 - [x] Package metadata and `CHANGELOG.md` present
 - [x] Local GA-100 verification passed
 - [x] Local Git commit created
-- [ ] Configure `REPOSITORY_URL` and push `main`
-- [ ] Confirm GitHub Actions CI is green
-- [ ] Configure `NPM_TOKEN`
-- [ ] Trigger `release.yml` and publish `v0.1.0` with provenance
+- [x] Configure `REPOSITORY_URL` and push `main` → `https://github.com/harryrimPod/badodo-script`
+- [x] Confirm GitHub Actions CI is green
+- [x] GitHub Release `v0.1.0` published (`main` + tag + notes from this document)
+- [ ] Configure `NPM_TOKEN` and trigger `release.yml` to publish `v0.1.0` to npm (optional)

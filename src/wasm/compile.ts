@@ -7,13 +7,28 @@ type WabtFactory = () => Promise<{
   parseWat(name: string, source: string): { toBinary(options: Record<string, unknown>): { buffer: ArrayBuffer }; destroy(): void };
 }>;
 
-async function loadWabt(): Promise<WabtFactory> {
-  try {
-    const module = await import("wabt");
-    return module.default as unknown as WabtFactory;
-  } catch (error) {
-    throw new Error(`WASM 编译需要 wabt 依赖；请在项目中执行 npm install。${error instanceof Error ? ` 原因：${error.message}` : ""}`);
+type WabtInstance = Awaited<ReturnType<WabtFactory>>;
+let wabtPromise: Promise<WabtInstance> | undefined;
+
+async function loadWabt(): Promise<WabtInstance> {
+  if (!wabtPromise) {
+    wabtPromise = (async () => {
+      try {
+        const module = await import("wabt");
+        const factory = module.default as unknown as WabtFactory;
+        return factory();
+      } catch (error) {
+        wabtPromise = undefined;
+        throw new Error(`WASM 编译需要 wabt 依赖；请在项目中执行 npm install。${error instanceof Error ? ` 原因：${error.message}` : ""}`);
+      }
+    })();
   }
+  return wabtPromise;
+}
+
+/** Drop the initialized WABT instance when a long-running host unloads WASM. */
+export function clearWasmCompilerCache(): void {
+  wabtPromise = undefined;
 }
 
 export interface WasmResult {
@@ -25,8 +40,7 @@ export interface WasmResult {
 /** Compile an AST into a .wasm binary (pure-compute functions only). */
 export async function compileAstToWasm(program: AST.Program): Promise<WasmResult> {
   const { wat, exported } = generateWat(program);
-  const wabt = await loadWabt();
-  const wabtInstance = await wabt();
+  const wabtInstance = await loadWabt();
   const module = wabtInstance.parseWat("module.wat", wat);
   const binary = module.toBinary({}).buffer;
   module.destroy();

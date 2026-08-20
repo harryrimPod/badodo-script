@@ -10,6 +10,7 @@ bds-signing-*.pem
 !examples/*.ts.map
 *.tgz
 dist-bin/
+.bds-cache/
 .workbuddy/
 .tmp/
 # The full MapLibre provenance checkout is a local audit fixture. Keep the

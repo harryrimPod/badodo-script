@@ -1589,6 +1589,8 @@ ${canonicalJson(unsigned)}`))
     if (!value.ok) throw new Error(`Result unwrap \u5931\u8D25: ${String(value.error)}`);
     return value.value;
   }
+  var COMPILED_EXECUTOR_CACHE = /* @__PURE__ */ new Map();
+  var MAX_COMPILED_EXECUTORS = 128;
   var BadodoRuntime = class {
     nodes = /* @__PURE__ */ new Map();
     bindings = [];
@@ -1660,9 +1662,7 @@ ${canonicalJson(unsigned)}`))
       if (!eventMap) return;
       const handlers = eventMap.get(event);
       if (!handlers) return;
-      for (const handler of [...handlers]) {
-        handler(value);
-      }
+      for (let i = 0; i < handlers.length; i += 1) handlers[i](value);
     }
     /** Run a Badodo Script source string against the registered nodes. */
     run(source) {
@@ -1693,7 +1693,16 @@ ${canonicalJson(unsigned)}`))
         is_ok,
         unwrap
       ];
-      const fn = new Function(...nodeNames, "bind", "watch", "onFrame", "on", "animate", "animateTo", "vec3", "color", "some", "none", "ok", "err", "is_ok", "unwrap", code);
+      const cacheKey = `${nodeNames.join("\0")}\0${code}`;
+      let fn = COMPILED_EXECUTOR_CACHE.get(cacheKey);
+      if (!fn) {
+        fn = new Function(...nodeNames, "bind", "watch", "onFrame", "on", "animate", "animateTo", "vec3", "color", "some", "none", "ok", "err", "is_ok", "unwrap", code);
+        if (COMPILED_EXECUTOR_CACHE.size >= MAX_COMPILED_EXECUTORS) {
+          const oldest = COMPILED_EXECUTOR_CACHE.keys().next().value;
+          if (oldest !== void 0) COMPILED_EXECUTOR_CACHE.delete(oldest);
+        }
+        COMPILED_EXECUTOR_CACHE.set(cacheKey, fn);
+      }
       fn(...args);
     }
     /** Advance one frame. Call this from Babylon's render loop or requestAnimationFrame. */
@@ -1718,19 +1727,22 @@ ${canonicalJson(unsigned)}`))
           b.node[b.prop] = value;
         }
       }
-      for (let i = this.tweens.length - 1; i >= 0; i--) {
+      let activeTweens = 0;
+      for (let i = 0; i < this.tweens.length; i += 1) {
         const tween = this.tweens[i];
         tween.elapsed += deltaTime;
         const t = Math.min(tween.elapsed / tween.duration, 1);
         if (tween.isVector) {
-          writeVector(tween.node, tween.prop, lerpVector(tween.from, tween.to, t));
+          writeVectorLerp(tween.node, tween.prop, tween.from, tween.to, t);
         } else {
           tween.node[tween.prop] = tween.from + (tween.to - tween.from) * t;
         }
-        if (t >= 1) {
-          this.tweens.splice(i, 1);
+        if (t < 1) {
+          this.tweens[activeTweens] = tween;
+          activeTweens += 1;
         }
       }
+      this.tweens.length = activeTweens;
     }
     /** Convenience: run an auto requestAnimationFrame loop (browser only). */
     startAutoLoop() {
@@ -1760,27 +1772,23 @@ ${canonicalJson(unsigned)}`))
       z: value?.z ?? 0
     };
   }
-  function lerpVector(from, to, t) {
-    return {
-      x: from.x + (to.x - from.x) * t,
-      y: from.y + (to.y - from.y) * t,
-      z: from.z + (to.z - from.z) * t
-    };
-  }
-  function writeVector(node, prop, value) {
+  function writeVectorLerp(node, prop, from, to, t) {
+    const x = from.x + (to.x - from.x) * t;
+    const y = from.y + (to.y - from.y) * t;
+    const z = from.z + (to.z - from.z) * t;
     if (prop === "position" && node.position && typeof node.position === "object") {
-      node.position.x = value.x;
-      node.position.y = value.y;
-      node.position.z = value.z;
+      node.position.x = x;
+      node.position.y = y;
+      node.position.z = z;
       return;
     }
     if (node[prop] && typeof node[prop] === "object") {
-      node[prop].x = value.x;
-      node[prop].y = value.y;
-      node[prop].z = value.z;
+      node[prop].x = x;
+      node[prop].y = y;
+      node[prop].z = z;
       return;
     }
-    node[prop] = value;
+    node[prop] = { x, y, z };
   }
 
   // src/adapters/babylon.ts

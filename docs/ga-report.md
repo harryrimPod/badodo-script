@@ -2,7 +2,7 @@
 
 日期：2026-08-20  
 目标：Badodo 引擎工具内嵌脚本层  
-版本：0.1.1（GA-100，已发布 v0.1.0；本版新增 bds run 与语法使用说明书，证据与契约不变）
+版本：0.1.2（GA-100，性能与分发增量）
 
 ## 结果
 
@@ -21,9 +21,17 @@
 
 - `bds.exe` 已改为 Node SEA 单文件构建，内嵌 Node 24.16.0，满足项目声明的 Node.js 20+ 运行时契约。
 - `bds.exe doctor`、`run`、`compile`、`wasm`、`pack` 均在零安装目录通过；standalone 不再错误要求外部 `dist/lsp-cli.js`，LSP 边界以 INFO 明示。
-- `badodo-script-0.1.1-dist.zip` 已包含 `dist/`、示例、`wabt`、许可证和元数据，可在空目录中直接完成上述 CLI/WASM 流程。
+- `badodo-script-0.1.2-dist.zip` 已包含 `dist/`、示例、`wabt`、许可证和元数据，可在空目录中直接完成上述 CLI/WASM 流程。
 - 新增 `package:standalone`、`package:node-dist` 和 `test:standalone`，后续发布可重复构建并生成 `SHA256SUMS.txt`。
 - 当前本地 Windows 二进制未配置 Authenticode 证书；对外发布前应在企业发布流水线完成签名，再上传 GitHub Release。
+
+## 性能增量
+
+- 内容哈希编译缓存：重复编译命中磁盘缓存，支持 `--no-cache` 和 `--cache-dir`。
+- Runtime executor cache：相同节点签名和代码复用 `new Function` 结果，最大 128 项。
+- Tick/tween/event 热路径：移除事件数组复制、向量逐帧临时对象和 tween `splice`。
+- WASM：WABT 初始化在长驻进程内复用，WASM warm compile 只保留解析/生成成本。
+- 性能 smoke 已纳入 `npm run verify`，输出编译、tick 和 WASM 冷热数据。
 
 ## GA 边界
 

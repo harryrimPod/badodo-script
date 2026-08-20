@@ -70,7 +70,7 @@ npx bds run examples/door.bds
 npm run verify
 ```
 
-当前发布基线为 **0.1.1 GA-100**，已在 GitHub 公开发布（`harryrimPod/badodo-script`）。GA-100 表示 Badodo 引擎工具边界内的技术契约已具备自动化证据；npm 发布为可选后续步骤。新增 `bds run` 一键运行与语法使用说明书 `docs/syntax-guide.md`。
+当前发布基线为 **0.1.2 GA-100**，已在 GitHub 公开发布（`harryrimPod/badodo-script`）。GA-100 表示 Badodo 引擎工具边界内的技术契约已具备自动化证据；npm 发布为可选后续步骤。本版加入编译缓存、runtime 热路径优化、WASM WABT 复用和轻量 core 分发。
 
 ### 项目状态
 
@@ -156,7 +156,7 @@ Run the full verification suite:
 npm run verify
 ```
 
-The current release baseline is **0.1.1 GA-100**, published on GitHub (`harryrimPod/badodo-script`). GA-100 means the bounded Badodo engine-tool contract has repeatable technical evidence; npm publication is an optional next step. New in v0.1.1: `bds run` one-shot execution and `docs/syntax-guide.md`.
+The current release baseline is **0.1.2 GA-100**, published on GitHub (`harryrimPod/badodo-script`). GA-100 means the bounded Badodo engine-tool contract has repeatable technical evidence; npm publication is an optional next step. New in v0.1.2: compile caching, runtime hot-path optimization, WABT reuse, and a lightweight core distribution.
 
 ### Project status
 

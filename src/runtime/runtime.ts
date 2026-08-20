@@ -51,6 +51,19 @@ export interface RuntimeHandles {
   on: (node: any, event: string, handler: (value?: any) => void) => void;
 }
 
+type CompiledExecutor = (...args: any[]) => void;
+const COMPILED_EXECUTOR_CACHE = new Map<string, CompiledExecutor>();
+const MAX_COMPILED_EXECUTORS = 128;
+
+/** Clear cached executors when a host unloads a scene or plugin. */
+export function clearRuntimeCompilationCache(): void {
+  COMPILED_EXECUTOR_CACHE.clear();
+}
+
+export function runtimeCompilationCacheSize(): number {
+  return COMPILED_EXECUTOR_CACHE.size;
+}
+
 interface BindingEntry {
   getter: () => any;
   node: any;
@@ -93,6 +106,7 @@ interface TweenEntry {
  */
 export class BadodoRuntime {
   private nodes = new Map<string, any>();
+  private resolvedNodeArgs = new Map<string, any[]>();
   private bindings: BindingEntry[] = [];
   private watchers: WatchEntry[] = [];
   private frameHandlers: ((time: number) => void)[] = [];
@@ -102,12 +116,14 @@ export class BadodoRuntime {
 
   registerNode(name: string, node: any): void {
     this.nodes.set(name, node);
+    this.resolvedNodeArgs.clear();
   }
 
   registerNodes(map: NodeMap): void {
     for (const [name, node] of Object.entries(map)) {
       this.nodes.set(name, node);
     }
+    this.resolvedNodeArgs.clear();
   }
 
   resolveNode(name: string): any {
@@ -116,6 +132,20 @@ export class BadodoRuntime {
       throw new Error(`节点「${name}」未找到。请先用 registerNode("${name}", ...) 注册它。`);
     }
     return node;
+  }
+
+  private resolveNodeArgs(nodeNames: readonly string[]): any[] {
+    const key = nodeNames.join("\u0000");
+    const cached = this.resolvedNodeArgs.get(key);
+    if (cached) return cached;
+    const resolved = new Array<any>(nodeNames.length);
+    for (let i = 0; i < nodeNames.length; i += 1) resolved[i] = this.resolveNode(nodeNames[i]);
+    if (this.resolvedNodeArgs.size >= MAX_COMPILED_EXECUTORS) {
+      const oldest = this.resolvedNodeArgs.keys().next().value;
+      if (oldest !== undefined) this.resolvedNodeArgs.delete(oldest);
+    }
+    this.resolvedNodeArgs.set(key, resolved);
+    return resolved;
   }
 
   bind = (getter: () => any, node: any, prop: string): void => {
@@ -173,9 +203,8 @@ export class BadodoRuntime {
     if (!eventMap) return;
     const handlers = eventMap.get(event);
     if (!handlers) return;
-    for (const handler of [...handlers]) {
-      handler(value);
-    }
+    const handlerCount = handlers.length;
+    for (let i = 0; i < handlerCount; i += 1) handlers[i](value);
   }
 
   /** Run a Badodo Script source string against the registered nodes. */
@@ -192,7 +221,7 @@ export class BadodoRuntime {
   runCompiled(code: string, nodeNames: string[]): void {
     assertBdsPayload({ version: BDS_PAYLOAD_VERSION, nodeNames, code });
     const args = [
-      ...nodeNames.map((n) => this.resolveNode(n)),
+      ...this.resolveNodeArgs(nodeNames),
       this.bind,
       this.watch,
       this.onFrame,
@@ -208,7 +237,16 @@ export class BadodoRuntime {
       is_ok,
       unwrap,
     ];
-    const fn = new Function(...nodeNames, "bind", "watch", "onFrame", "on", "animate", "animateTo", "vec3", "color", "some", "none", "ok", "err", "is_ok", "unwrap", code);
+    const cacheKey = `${nodeNames.join("\u0000")}\u0000${code}`;
+    let fn = COMPILED_EXECUTOR_CACHE.get(cacheKey);
+    if (!fn) {
+      fn = new Function(...nodeNames, "bind", "watch", "onFrame", "on", "animate", "animateTo", "vec3", "color", "some", "none", "ok", "err", "is_ok", "unwrap", code) as CompiledExecutor;
+      if (COMPILED_EXECUTOR_CACHE.size >= MAX_COMPILED_EXECUTORS) {
+        const oldest = COMPILED_EXECUTOR_CACHE.keys().next().value;
+        if (oldest !== undefined) COMPILED_EXECUTOR_CACHE.delete(oldest);
+      }
+      COMPILED_EXECUTOR_CACHE.set(cacheKey, fn);
+    }
     fn(...args);
   }
 
@@ -238,19 +276,22 @@ export class BadodoRuntime {
       }
     }
 
-    for (let i = this.tweens.length - 1; i >= 0; i--) {
+    let activeTweens = 0;
+    for (let i = 0; i < this.tweens.length; i += 1) {
       const tween = this.tweens[i];
       tween.elapsed += deltaTime;
       const t = Math.min(tween.elapsed / tween.duration, 1);
       if (tween.isVector) {
-        writeVector(tween.node, tween.prop, lerpVector(tween.from, tween.to, t));
+        writeVectorLerp(tween.node, tween.prop, tween.from, tween.to, t);
       } else {
         tween.node[tween.prop] = tween.from + (tween.to - tween.from) * t;
       }
-      if (t >= 1) {
-        this.tweens.splice(i, 1);
+      if (t < 1) {
+        this.tweens[activeTweens] = tween;
+        activeTweens += 1;
       }
     }
+    this.tweens.length = activeTweens;
   }
 
   /** Convenience: run an auto requestAnimationFrame loop (browser only). */
@@ -295,26 +336,21 @@ function normalizeVector(value: any): { x: number; y: number; z: number } {
   };
 }
 
-function lerpVector(from: { x: number; y: number; z: number }, to: { x: number; y: number; z: number }, t: number) {
-  return {
-    x: from.x + (to.x - from.x) * t,
-    y: from.y + (to.y - from.y) * t,
-    z: from.z + (to.z - from.z) * t,
-  };
-}
-
-function writeVector(node: any, prop: string, value: { x: number; y: number; z: number }): void {
+function writeVectorLerp(node: any, prop: string, from: { x: number; y: number; z: number }, to: { x: number; y: number; z: number }, t: number): void {
+  const x = from.x + (to.x - from.x) * t;
+  const y = from.y + (to.y - from.y) * t;
+  const z = from.z + (to.z - from.z) * t;
   if (prop === "position" && node.position && typeof node.position === "object") {
-    node.position.x = value.x;
-    node.position.y = value.y;
-    node.position.z = value.z;
+    node.position.x = x;
+    node.position.y = y;
+    node.position.z = z;
     return;
   }
   if (node[prop] && typeof node[prop] === "object") {
-    node[prop].x = value.x;
-    node[prop].y = value.y;
-    node[prop].z = value.z;
+    node[prop].x = x;
+    node[prop].y = y;
+    node[prop].z = z;
     return;
   }
-  node[prop] = value;
+  node[prop] = { x, y, z };
 }

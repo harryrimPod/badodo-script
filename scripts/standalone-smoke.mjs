@@ -7,6 +7,7 @@ import { fileURLToPath } from "node:url";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const executable = path.resolve(process.env.BDS_STANDALONE ?? path.join(root, "dist-bin", "bds.exe"));
+const packageVersion = JSON.parse(fs.readFileSync(path.join(root, "package.json"), "utf8")).version;
 
 if (!fs.existsSync(executable)) {
   if (process.env.BDS_REQUIRE_STANDALONE === "1") throw new Error(`standalone 可执行文件不存在: ${executable}`);
@@ -20,7 +21,7 @@ function run(args) {
 
 const fixture = fs.mkdtempSync(path.join(os.tmpdir(), "bds-standalone-"));
 try {
-  assert.match(run(["--version"]), /^0\.1\.1\r?\n?$/);
+  assert.match(run(["--version"]), new RegExp(`^${packageVersion.replace(/\./g, "\\.")}\\r?\\n?$`));
   const doctor = run(["doctor"]);
   assert.doesNotMatch(doctor, /FAIL/);
   assert.match(run(["run", "examples/door.bds"]), /运行成功/);

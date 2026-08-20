@@ -37,6 +37,7 @@ export * from "./server-go-mqtt";
 export * from "./strict-compile";
 export * from "./version";
 export * from "./lsp";
+export * from "./compile-cache";
 
 export interface CompileResult {
   typescript: string;

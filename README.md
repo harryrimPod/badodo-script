@@ -2,7 +2,7 @@
 
 一门面向 **Web 3D 场景、地图、交互和数据绑定** 的小型脚本语言。受 GDScript 启发，但更克制、更易读，可直接转译为 TypeScript。
 
-> 当前版本：**0.1.1**。可从 GitHub 克隆运行，也可作为 npm 包独立安装；详见 `docs/syntax-guide.md`。
+> 当前版本：**0.1.2**。可从 GitHub 克隆运行，也可作为 npm 包独立安装；详见 `docs/syntax-guide.md`。
 
 > **不是让程序员觉得厉害的语言，而是让普通人第一次看到就敢写第二行的语言。**
 
@@ -136,7 +136,7 @@ GA-100 验收边界与本轮证据见 [`docs/ga-contract.md`](docs/ga-contract.m
 npx --yes github:harryrimPod/badodo-script run examples/door.bds
 ```
 
-或下载 [v0.1.1 Release](https://github.com/harryrimPod/badodo-script/releases/tag/v0.1.1) 的 `bds.exe`：
+或下载 [v0.1.2 Release](https://github.com/harryrimPod/badodo-script/releases/tag/v0.1.2) 的 `bds.exe`：
 
 ```powershell
 .\bds.exe run examples/door.bds
@@ -195,6 +195,8 @@ npm run build          # 编译编译器
 node dist/cli.js examples/door.bds          # 输出 examples/door.ts + .ts.map
 node dist/cli.js compile examples/door.bds  # 同上
 node dist/cli.js run examples/door.bds      # Node 侧注入本地运行时并执行
+node dist/cli.js compile examples/door.bds --cache-dir .bds-cache
+node dist/cli.js compile examples/door.bds --no-cache
 ```
 
 `bds run` 会自动从 AST 收集场景节点并注册本地 fixture 节点；也可以用

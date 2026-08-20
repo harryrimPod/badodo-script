@@ -11,6 +11,7 @@ import { compileToWasm } from "./wasm/compile";
 import { BadodoRuntime } from "./runtime/runtime";
 import { collectNodes } from "./runtime/collect-nodes";
 import { BDS_VERSION } from "./version";
+import { CompileCache } from "./compile-cache";
 import {
   generateSigningKeyPair,
   issueLicense,
@@ -44,6 +45,8 @@ Options:
   --nodes <names>   comma-separated scene-node manifest for --strict.
   --target <name>   strict target: portable, web, server, or godot.
   --emit-types      preserve safe BDS type annotations in generated TypeScript.
+  --no-cache        disable the content-addressed compile cache.
+  --cache-dir <path>  override the compile cache directory (default .bds-cache).
   --config <path>   read compile defaults from badodo.config.json (or a custom path).
   --private-key <path>  Ed25519 issuer private key for sign.
   --public-key <path>   Ed25519 issuer public key for verify.
@@ -77,16 +80,21 @@ async function wasmFile(inputPath: string, outputPath?: string): Promise<void> {
   console.log(`  导出函数: ${exported.length ? exported.join(", ") : "(无纯计算函数)"}`);
 }
 
-function compileFile(inputPath: string, outputPath?: string, strictOptions?: StrictCompileOptions, compileOptions: CompileOptions = {}): void {
+function compileFile(inputPath: string, outputPath?: string, strictOptions?: StrictCompileOptions, compileOptions: CompileOptions = {}, cache?: CompileCache): void {
   if (!fs.existsSync(inputPath)) {
     console.error(`文件不存在: ${inputPath}`);
     process.exit(1);
   }
 
   const source = fs.readFileSync(inputPath, "utf-8");
-  const result = strictOptions
-    ? compileStrict(source, { ...strictOptions, ...compileOptions, sourceName: path.basename(inputPath) })
-    : compile(source, path.basename(inputPath), compileOptions);
+  const sourceName = path.basename(inputPath);
+  const result = cache
+    ? cache.getOrCompile(source, sourceName, { strictOptions, compileOptions }, () => strictOptions
+      ? compileStrict(source, { ...strictOptions, ...compileOptions, sourceName })
+      : compile(source, sourceName, compileOptions))
+    : strictOptions
+      ? compileStrict(source, { ...strictOptions, ...compileOptions, sourceName })
+      : compile(source, sourceName, compileOptions);
   const out = outputPath ?? resolveOut(inputPath, ".ts");
   const mapOut = out + ".map";
   ensureOutputParent(out);
@@ -153,14 +161,18 @@ function runFile(
   strictOptions: StrictCompileOptions | undefined,
   compileOptions: CompileOptions,
   explicitNodes: readonly string[] | undefined,
+  cache?: CompileCache,
 ): void {
   if (!fs.existsSync(inputPath)) throw new Error(`文件不存在: ${inputPath}`);
 
   const source = fs.readFileSync(inputPath, "utf-8");
   const sourceName = path.basename(inputPath);
-  const result = strictOptions
-    ? compileStrict(source, { ...strictOptions, emitTypes: compileOptions.emitTypes, sourceName })
-    : compile(source, sourceName, compileOptions);
+  const compileResult = (emitTypes: boolean) => strictOptions
+    ? compileStrict(source, { ...strictOptions, emitTypes, sourceName })
+    : compile(source, sourceName, { emitTypes });
+  const result = cache
+    ? cache.getOrCompile(source, sourceName, { strictOptions, compileOptions }, () => compileResult(compileOptions.emitTypes ?? false))
+    : compileResult(compileOptions.emitTypes ?? false);
   const ast = parse(tokenize(source));
   if (ast.body.some((statement) => statement.kind === "ImportDecl")) {
     throw new Error("bds run 不支持直接执行包含 import 的文件；请先使用 bundler 解析模块");
@@ -169,9 +181,9 @@ function runFile(
   // `--emit-types` is honored by the compile pass, while execution uses the
   // same source projected without annotations because Node does not parse TS.
   const executable = compileOptions.emitTypes
-    ? (strictOptions
-      ? compileStrict(source, { ...strictOptions, emitTypes: false, sourceName }).typescript
-      : compile(source, sourceName, { emitTypes: false }).typescript)
+      ? (cache
+        ? cache.getOrCompile(source, sourceName, { strictOptions, emitTypes: false }, () => compileResult(false)).typescript
+        : compileResult(false).typescript)
     : result.typescript;
   const detectedNodes = collectNodes(ast);
   const nodeNames = Array.from(new Set([...detectedNodes, ...(explicitNodes ?? [])])).sort();
@@ -387,6 +399,8 @@ function main(): void {
   let publicKeyPath: string | undefined;
   let licensePath: string | undefined;
   let feature: string | undefined;
+  let cacheEnabled = true;
+  let cacheDir = path.resolve(".bds-cache");
   const positional: string[] = [];
   for (let i = 0; i < rest.length; i++) {
     if (rest[i] === "-k" || rest[i] === "--key") {
@@ -407,6 +421,12 @@ function main(): void {
       target = parseTarget(rest[i].slice("--target=".length));
     } else if (rest[i] === "--emit-types") {
       emitTypes = true;
+    } else if (rest[i] === "--no-cache") {
+      cacheEnabled = false;
+    } else if (rest[i] === "--cache-dir") {
+      cacheDir = path.resolve(rest[++i] ?? ".bds-cache");
+    } else if (rest[i].startsWith("--cache-dir=")) {
+      cacheDir = path.resolve(rest[i].slice("--cache-dir=".length));
     } else if (rest[i] === "--config") {
       configPath = rest[++i];
     } else if (rest[i].startsWith("--config=")) {
@@ -482,6 +502,7 @@ function main(): void {
   }
 
   try {
+    const cache = new CompileCache({ cacheDir, enabled: cacheEnabled, compilerVersion: BDS_VERSION });
     if (strict && cmd !== "compile" && cmd !== "run") {
       throw new Error("--strict 只能用于 compile 或 run 命令");
     }
@@ -495,7 +516,7 @@ function main(): void {
       const runStrictOptions = (strict || nodeNames !== undefined || target !== undefined)
         ? { nodeNames, target, requireNodeManifest: strict || nodeNames !== undefined }
         : undefined;
-      runFile(inputPath, runStrictOptions, { emitTypes }, nodeNames);
+      runFile(inputPath, runStrictOptions, { emitTypes }, nodeNames, cache);
     } else if (cmd === "sign") {
       signFile(inputPath, positional[1], privateKeyPath, licensePath);
     } else if (cmd === "verify") {
@@ -503,7 +524,7 @@ function main(): void {
     } else if (cmd === "wasm") {
       wasmFile(inputPath, positional[1]);
     } else {
-      compileFile(inputPath, positional[1] ?? configuredOutput, strict ? { nodeNames, target } : undefined, { emitTypes });
+      compileFile(inputPath, positional[1] ?? configuredOutput, strict ? { nodeNames, target } : undefined, { emitTypes }, cache);
     }
   } catch (err) {
     console.error("处理失败:");

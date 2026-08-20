@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.1.2 - 2026-08-20
+
+- Added content-addressed incremental compile cache with `--no-cache` and `--cache-dir` controls.
+- Added bounded compiled-executor cache and lower-allocation runtime tick/tween/event paths.
+- Reused the initialized WABT compiler across WASM compilations in long-lived hosts.
+- Added core Node distribution, performance smoke benchmarks, and reproducible packaging commands.
+
 ## 0.1.1 - 2026-08-20
 
 - Added `bds run`: compile-and-run in a single command with local fixture nodes (Python-like DX).

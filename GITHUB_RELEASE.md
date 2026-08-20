@@ -40,30 +40,24 @@ Badodo Script（简称 **BDS**，文件后缀 `.bds`）是一门面向 Web 3D �
 
 Go/C# 投影用于数据合同、服务适配和宿主桥接；任意 BDS 场景行为目前仍以 TypeScript/Web 运行时为主。
 
-### 快速开始（免编译，像 Python 一样）
-
-**`npx github:` 直跑（无需 npm 账号，免费）：**
+### 快速开始
 
 ```powershell
 npx --yes github:harryrimPod/badodo-script run examples/door.bds
 ```
 
-**`bds.exe` 单文件（无需安装 Node，像 `python.exe`，免费）：**
-从本页 Assets 下载 `bds.exe`：
+或下载本页 `bds.exe`：
 
 ```powershell
-.\bds.exe --version
 .\bds.exe run examples/door.bds
 ```
 
-**源码构建（贡献者）：**
+本地构建：
 
 ```powershell
 npm install
 npm run build
 npx bds run examples/door.bds
-# 查看编译产物
-npx bds compile examples/animate.bds -o examples/animate.ts
 ```
 
 运行完整本地验证：
@@ -71,8 +65,6 @@ npx bds compile examples/animate.bds -o examples/animate.ts
 ```powershell
 npm run verify
 ```
-
-`bds run` 会自动编译并在 Node 侧注入本地运行时直接执行（类似 `python xxx.py`），无需手动 `tsc`。
 
 当前发布基线为 **0.1.1 GA-100**，已在 GitHub 公开发布（`harryrimPod/badodo-script`）。GA-100 表示 Badodo 引擎工具边界内的技术契约已具备自动化证据；npm 发布为可选后续步骤。新增 `bds run` 一键运行与语法使用说明书 `docs/syntax-guide.md`。
 
@@ -129,39 +121,31 @@ The primary compilation pipeline is:
 
 Go and C# projections target data contracts, service adapters, and host bridges. Arbitrary BDS scene behavior currently runs primarily through the TypeScript/Web runtime.
 
-### Quick start (no build — like Python)
-
-**`npx github:` (no npm account needed, free):**
+### Quick start
 
 ```bash
 npx --yes github:harryrimPod/badodo-script run examples/door.bds
 ```
 
-**Standalone `bds.exe` (no Node install, like `python.exe`, free):**
-Download `bds.exe` from Assets on this page:
+Or download `bds.exe` from Assets:
 
 ```powershell
-.\bds.exe --version
 .\bds.exe run examples/door.bds
 ```
 
-**From source (contributors):**
+From source:
 
 ```bash
 npm install
 npm run build
 npx bds run examples/door.bds
-# Inspect compiled output
-npx bds compile examples/animate.bds -o examples/animate.ts
 ```
 
-Run the complete local verification suite:
+Run the full verification suite:
 
 ```bash
 npm run verify
 ```
-
-`bds run` compiles and runs with an in-process Node runtime (like `python xxx.py`), with local fixture nodes auto-registered.
 
 The current release baseline is **0.1.1 GA-100**, published on GitHub (`harryrimPod/badodo-script`). GA-100 means the bounded Badodo engine-tool contract has repeatable technical evidence; npm publication is an optional next step. New in v0.1.1: `bds run` one-shot execution and `docs/syntax-guide.md`.
 

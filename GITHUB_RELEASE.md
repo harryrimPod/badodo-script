@@ -195,4 +195,5 @@ Babylon.js, MapLibre GL JS, TypeScript, Playwright, esbuild, WABT, and other thi
 - [x] Confirm GitHub Actions CI is green
 - [x] GitHub Release `v0.1.0` published (`main` + tag + notes from this document)
 - [x] `v0.1.1`: `bds run` + `docs/syntax-guide.md` ready
+- [x] `v0.1.2`: compile cache, runtime hot paths, WABT reuse, and core distribution ready
 - [ ] Configure `NPM_TOKEN` and trigger `release.yml` to publish to npm (optional)

@@ -2,7 +2,7 @@
 
 日期：2026-08-20  
 目标：Badodo 引擎工具内嵌脚本层  
-版本：0.1.0（GA-100 技术交付候选，公共 npm 版本号待发布流程确认）
+版本：0.1.1（GA-100，已发布 v0.1.0；本版新增 bds run 与语法使用说明书，证据与契约不变）
 
 ## 结果
 
@@ -23,7 +23,7 @@ GA-100 表示本报告中的 Badodo 引擎工具契约全部有自动化证据�
 
 ## 发布动作
 
-1. 将 `E:\AI_WORK\dodoscript` 推送到 GitHub。
-2. 确认 GitHub Actions CI 在 Node 20/22、Go 1.22、.NET 8 和 Chromium 上通过。
-3. 配置 `NPM_TOKEN` 后手动触发 `.github/workflows/release.yml`。
-4. 发布后再创建 `v0.1.0` 公共 npm/GitHub Release；后续 API 变更按 CHANGELOG 和兼容性报告推进。
+1. `v0.1.0` 已推送到 GitHub 并创建 Release；`bds run` 与语法使用说明书随 `v0.1.1` 增量发布。
+2. GitHub Actions CI 在 Node 20/22、Go 1.22、.NET 8 和 Chromium 上已通过。
+3. npm `release.yml` 为可选（`NPM_TOKEN` + provenance）。
+4. 后续 API 变更按 CHANGELOG 和兼容性报告推进。

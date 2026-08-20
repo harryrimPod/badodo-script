@@ -1,6 +1,6 @@
 {
   "name": "badodo-script",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Badodo Script compiler - transpiles to TypeScript",
   "keywords": [
     "badodo",

@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.1.1 - 2026-08-20
+
+- Added `bds run`: compile-and-run in a single command with local fixture nodes (Python-like DX).
+- Added syntax user guide `docs/syntax-guide.md`.
+- Updated GitHub release notes and README for `bds run`.
+
 ## 0.1.0 - 2026-08-19
 
 - First public technical-preview BDS compiler package.

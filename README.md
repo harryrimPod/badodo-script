@@ -2,7 +2,7 @@
 
 一门面向 **Web 3D 场景、地图、交互和数据绑定** 的小型脚本语言。受 GDScript 启发，但更克制、更易读，可直接转译为 TypeScript。
 
-> 当前版本：**0.1.0 技术预览版**。可从 GitHub 克隆运行，也可作为 npm 包独立安装；API、适配器和加密/签名格式仍按预览版演进。
+> 当前版本：**0.1.1**。可从 GitHub 克隆运行，也可作为 npm 包独立安装；详见 `docs/syntax-guide.md`。
 
 > **不是让程序员觉得厉害的语言，而是让普通人第一次看到就敢写第二行的语言。**
 
@@ -124,7 +124,7 @@ onFrame((time) => {
 animate(door, "y", 2, 0.5);
 ```
 
-完整语法见 [`docs/spec.md`](docs/spec.md)。
+完整语法与使用示例见 [`docs/syntax-guide.md`](docs/syntax-guide.md) 与 [`docs/spec.md`](docs/spec.md)。
 
 GA-100 验收边界与本轮证据见 [`docs/ga-contract.md`](docs/ga-contract.md) 和 [`docs/ga-report.md`](docs/ga-report.md)。
 
@@ -490,6 +490,7 @@ vendor/MAPLIBRE_PROVENANCE.md # MapLibre GL JS v4.7.1 provenance record
 
 ## 文档
 
+- [语法使用说明书](docs/syntax-guide.md)
 - [语言规范](docs/spec.md)
 - [架构与语义冻结](docs/architecture.md)
 - [项目概览](overview.md)

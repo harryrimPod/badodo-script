@@ -58,7 +58,7 @@ npm run verify
 
 `bds run` 会自动编译并在 Node 侧注入本地运行时直接执行（类似 `python xxx.py`），无需手动 `tsc`。
 
-当前发布基线为 **0.1.0 GA-100**，已在 GitHub 公开发布（`harryrimPod/badodo-script`）。GA-100 表示 Badodo 引擎工具边界内的技术契约已具备自动化证据；npm 发布为可选后续步骤。
+当前发布基线为 **0.1.1 GA-100**，已在 GitHub 公开发布（`harryrimPod/badodo-script`）。GA-100 表示 Badodo 引擎工具边界内的技术契约已具备自动化证据；npm 发布为可选后续步骤。新增 `bds run` 一键运行与语法使用说明书 `docs/syntax-guide.md`。
 
 ### 项目状态
 
@@ -131,7 +131,7 @@ npm run verify
 
 `bds run` compiles and runs with an in-process Node runtime (like `python xxx.py`), with local fixture nodes auto-registered.
 
-The current release baseline is **0.1.0 GA-100**, published on GitHub (`harryrimPod/badodo-script`). GA-100 means the bounded Badodo engine-tool contract has repeatable technical evidence; npm publication is an optional next step.
+The current release baseline is **0.1.1 GA-100**, published on GitHub (`harryrimPod/badodo-script`). GA-100 means the bounded Badodo engine-tool contract has repeatable technical evidence; npm publication is an optional next step. New in v0.1.1: `bds run` one-shot execution and `docs/syntax-guide.md`.
 
 ### Project status
 
@@ -154,6 +154,7 @@ Babylon.js, MapLibre GL JS, TypeScript, Playwright, esbuild, WABT, and other thi
 
 - `src/` — compiler, parser, type checker, runtime, adapters, projections, licensing, and LSP
 - `examples/` — `.bds` examples and golden TypeScript output
+- `docs/syntax-guide.md` — syntax user guide (v0.1.1)
 - `docs/ga-contract.md` — bounded GA-100 contract
 - `docs/ga-report.md` — current local evidence report
 - `editors/vscode/` — VS Code language package
@@ -168,4 +169,5 @@ Babylon.js, MapLibre GL JS, TypeScript, Playwright, esbuild, WABT, and other thi
 - [x] Configure `REPOSITORY_URL` and push `main` → `https://github.com/harryrimPod/badodo-script`
 - [x] Confirm GitHub Actions CI is green
 - [x] GitHub Release `v0.1.0` published (`main` + tag + notes from this document)
-- [ ] Configure `NPM_TOKEN` and trigger `release.yml` to publish `v0.1.0` to npm (optional)
+- [x] `v0.1.1`: `bds run` + `docs/syntax-guide.md` ready
+- [ ] Configure `NPM_TOKEN` and trigger `release.yml` to publish to npm (optional)

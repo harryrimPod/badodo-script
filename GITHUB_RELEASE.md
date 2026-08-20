@@ -45,6 +45,8 @@ Go/C# 投影用于数据合同、服务适配和宿主桥接；任意 BDS 场景
 ```powershell
 npm install
 npm run build
+npx bds run examples/door.bds
+# 查看编译产物
 npx bds compile examples/animate.bds -o examples/animate.ts
 ```
 
@@ -53,6 +55,8 @@ npx bds compile examples/animate.bds -o examples/animate.ts
 ```powershell
 npm run verify
 ```
+
+`bds run` 会自动编译并在 Node 侧注入本地运行时直接执行（类似 `python xxx.py`），无需手动 `tsc`。
 
 当前发布基线为 **0.1.0 GA-100**，已在 GitHub 公开发布（`harryrimPod/badodo-script`）。GA-100 表示 Badodo 引擎工具边界内的技术契约已具备自动化证据；npm 发布为可选后续步骤。
 
@@ -114,6 +118,8 @@ Go and C# projections target data contracts, service adapters, and host bridges.
 ```bash
 npm install
 npm run build
+npx bds run examples/door.bds
+# Inspect compiled output
 npx bds compile examples/animate.bds -o examples/animate.ts
 ```
 
@@ -122,6 +128,8 @@ Run the complete local verification suite:
 ```bash
 npm run verify
 ```
+
+`bds run` compiles and runs with an in-process Node runtime (like `python xxx.py`), with local fixture nodes auto-registered.
 
 The current release baseline is **0.1.0 GA-100**, published on GitHub (`harryrimPod/badodo-script`). GA-100 means the bounded Badodo engine-tool contract has repeatable technical evidence; npm publication is an optional next step.
 

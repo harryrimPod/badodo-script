@@ -55,7 +55,7 @@ var BDSCompiler = (() => {
     null: "NULL" /* NULL */
   };
   function keywordOrIdent(name) {
-    return KEYWORDS[name] ?? "IDENT" /* IDENT */;
+    return Object.prototype.hasOwnProperty.call(KEYWORDS, name) ? KEYWORDS[name] : "IDENT" /* IDENT */;
   }
 
   // src/lexer.ts

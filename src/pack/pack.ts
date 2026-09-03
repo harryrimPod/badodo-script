@@ -4,20 +4,23 @@ import { generateTypeScript } from "../generator";
 import { collectNodes } from "../runtime/collect-nodes";
 import { encryptToBinary, decryptFromBinary } from "./encrypt";
 import { assertBdsPayload, BDS_PAYLOAD_VERSION, BdsPayload } from "../payload";
+import { compileRuntime } from "../runtime/program";
 
 export type PackedPayload = BdsPayload;
 
 /**
  * Compile a .bds source, collect node references, and encrypt the whole
- * payload (node names + compiled JavaScript) into a binary blob.
+ * payload (export-target TypeScript plus bounded RuntimeProgram data) into a
+ * binary blob.
  */
 export function packScript(source: string, passphrase: string): Buffer {
   const tokens = tokenize(source);
   const ast = parse(tokens);
   const code = generateTypeScript(ast);
+  const runtimeProgram = compileRuntime(source);
   const nodeNames = collectNodes(ast);
 
-  const payload: PackedPayload = { version: BDS_PAYLOAD_VERSION, nodeNames, code };
+  const payload: PackedPayload = { version: BDS_PAYLOAD_VERSION, nodeNames, code, runtimeProgram };
   const json = JSON.stringify(payload);
   return encryptToBinary(json, passphrase);
 }

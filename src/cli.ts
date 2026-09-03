@@ -2,14 +2,12 @@
 import * as fs from "fs";
 import * as path from "path";
 import { compile, CompileOptions } from "./index";
-import { parse } from "./parser";
-import { tokenize } from "./lexer";
 import { compileStrict, StrictCompileOptions } from "./strict-compile";
 import { CapabilityTarget } from "./capabilities";
 import { packScript } from "./pack/pack";
 import { compileToWasm } from "./wasm/compile";
 import { BadodoRuntime } from "./runtime/runtime";
-import { collectNodes } from "./runtime/collect-nodes";
+import { compileRuntime } from "./runtime/program";
 import { BDS_VERSION } from "./version";
 import { CompileCache } from "./compile-cache";
 import {
@@ -131,31 +129,6 @@ function createRunNode(name: string): Record<string, unknown> {
   });
 }
 
-/**
- * Scene names are valid BDS identifiers but may be JavaScript reserved words
- * (for example, the common node name `switch`). Keep compile output unchanged
- * and alias only the temporary executable used by `bds run`.
- */
-function aliasRunNodes(code: string, nodeNames: readonly string[]): { code: string; names: string[]; aliases: Map<string, string> } {
-  const javascriptReserved = new Set([
-    "await", "break", "case", "catch", "class", "const", "continue", "debugger", "default", "delete", "do", "else",
-    "enum", "export", "extends", "false", "finally", "for", "function", "if", "implements", "import", "in", "instanceof",
-    "interface", "let", "new", "null", "package", "private", "protected", "public", "return", "static", "super", "switch",
-    "this", "throw", "true", "try", "typeof", "undefined", "var", "void", "while", "with", "yield", "arguments", "eval",
-  ]);
-  const safeBinding = (name: string): boolean => /^[A-Za-z_$][A-Za-z0-9_$]*$/.test(name) && !javascriptReserved.has(name);
-  const aliases = new Map<string, string>();
-  for (const name of nodeNames) {
-    if (!safeBinding(name)) aliases.set(name, `__bds_node_${name}`);
-  }
-  const token = /("(?:\\.|[^"\\])*"|'(?:\\.|[^'\\])*'|`(?:\\.|[^`\\])*`|\/\/[^\n]*|\/\*[\s\S]*?\*\/)|\b[A-Za-z_$][A-Za-z0-9_$]*\b/g;
-  const executable = code.replace(token, (full, protectedText: string | undefined) => {
-    if (protectedText !== undefined) return full;
-    return aliases.get(full) ?? full;
-  });
-  return { code: executable, names: nodeNames.map((name) => aliases.get(name) ?? name), aliases };
-}
-
 function runFile(
   inputPath: string,
   strictOptions: StrictCompileOptions | undefined,
@@ -173,29 +146,14 @@ function runFile(
   const result = cache
     ? cache.getOrCompile(source, sourceName, { strictOptions, compileOptions }, () => compileResult(compileOptions.emitTypes ?? false))
     : compileResult(compileOptions.emitTypes ?? false);
-  const ast = parse(tokenize(source));
-  if (ast.body.some((statement) => statement.kind === "ImportDecl")) {
-    throw new Error("bds run 不支持直接执行包含 import 的文件；请先使用 bundler 解析模块");
-  }
-
-  // `--emit-types` is honored by the compile pass, while execution uses the
-  // same source projected without annotations because Node does not parse TS.
-  const executable = compileOptions.emitTypes
-      ? (cache
-        ? cache.getOrCompile(source, sourceName, { strictOptions, emitTypes: false }, () => compileResult(false)).typescript
-        : compileResult(false).typescript)
-    : result.typescript;
-  const detectedNodes = collectNodes(ast);
-  const nodeNames = Array.from(new Set([...detectedNodes, ...(explicitNodes ?? [])])).sort();
-  const aliased = aliasRunNodes(executable, nodeNames);
+  const runtimeProgram = compileRuntime(source, sourceName);
+  const nodeNames = Array.from(new Set([...runtimeProgram.nodeNames, ...(explicitNodes ?? [])])).sort();
   const runtime = new BadodoRuntime();
   for (const name of nodeNames) {
     const node = createRunNode(name);
     runtime.registerNode(name, node);
-    const alias = aliased.aliases.get(name);
-    if (alias) runtime.registerNode(alias, node);
   }
-  runtime.runCompiled(aliased.code, aliased.names);
+  runtime.runProgram({ ...runtimeProgram, nodeNames });
   console.log(`运行成功: ${inputPath}`);
 }
 

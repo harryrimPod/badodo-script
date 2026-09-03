@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.2.0 - 2026-09-03
+
+- Replaced generated-JS evaluation with a bounded structured runtime: `RuntimeProgram` (versioned, frozen canonical AST) + `RuntimeExecutor` with step/loop/call-depth limits, unsafe-name blocking, and typed `RuntimeExecutionError`s.
+- `BadodoRuntime.runCompiled` no longer accepts generated JavaScript and fails closed; use `run()` / `runProgram()`.
+- Encrypted payloads now carry `runtimeProgram`; `bds pack` output and `runEncrypted` / `runSignedEncrypted` require re-packing pre-0.2.0 `.bds.bin` artifacts.
+- Added `test:bounded-runtime` suite covering limits, escape attempts, and host failures.
+- `bds run` executes through `compileRuntime()` directly; removed the JS reserved-word aliasing step.
+- Hardened `keywordOrIdent` lookup against prototype pollution.
+- Documented canonical List semantics (`docs/spec.md` 6.4.1): `collection.list` registry id, `array<element>` typing with conservative `unknown` for empty/heterogeneous cases, parametric 0..N arity, left-to-right evaluation, and Visual-Safe preservation rules.
+
 ## 0.1.2 - 2026-08-20
 
 - Added content-addressed incremental compile cache with `--no-cache` and `--cache-dir` controls.

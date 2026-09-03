@@ -1,3 +1,6 @@
+import type { RuntimeProgram } from "./runtime/program";
+import { validateRuntimeProgram } from "./runtime/program";
+
 /** Stable wire contract for encrypted BDS payloads. */
 export const BDS_PAYLOAD_VERSION = 1;
 
@@ -5,6 +8,8 @@ export interface BdsPayload {
   version: number;
   nodeNames: string[];
   code: string;
+  /** Versioned structured runtime data; code remains the export/build target. */
+  runtimeProgram?: RuntimeProgram;
 }
 
 export interface PayloadValidationError {
@@ -44,7 +49,7 @@ export function validateBdsPayload(value: unknown, expectedVersion = BDS_PAYLOAD
   }
 
   for (const key of Object.keys(object).sort()) {
-    if (!required.includes(key as keyof BdsPayload)) {
+    if (!required.includes(key as keyof BdsPayload) && key !== "runtimeProgram") {
       errors.push({ path: `$.${key}`, keyword: "additionalProperties", message: "不允许额外字段" });
     }
   }
@@ -78,6 +83,15 @@ export function validateBdsPayload(value: unknown, expectedVersion = BDS_PAYLOAD
 
   if (Object.prototype.hasOwnProperty.call(object, "code") && typeof object.code !== "string") {
     errors.push({ path: "$.code", keyword: "type", message: "code 必须是字符串" });
+  }
+
+  if (Object.prototype.hasOwnProperty.call(object, "runtimeProgram")) {
+    const runtimeValidation = validateRuntimeProgram(object.runtimeProgram);
+    if (!runtimeValidation.valid) {
+      for (const message of runtimeValidation.errors) {
+        errors.push({ path: "$.runtimeProgram", keyword: "type", message });
+      }
+    }
   }
 
   return { valid: errors.length === 0, errors };

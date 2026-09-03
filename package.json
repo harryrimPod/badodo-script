@@ -1,6 +1,6 @@
 {
   "name": "badodo-script",
-  "version": "0.1.2",
+  "version": "0.2.0",
   "description": "Badodo Script compiler - transpiles to TypeScript",
   "keywords": [
     "badodo",
@@ -47,6 +47,7 @@
     "test": "node dist/test.js",
     "pretest": "npm run build",
     "test:runtime": "node dist/runtime-test.js",
+    "test:bounded-runtime": "node dist/bounded-runtime-test.js",
     "test:conformance": "node dist/conformance-test.js",
     "test:types": "node dist/type-test.js",
     "test:shared": "node dist/shared-test.js",

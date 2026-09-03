@@ -2,7 +2,7 @@
 
 一门面向 **Web 3D 场景、地图、交互和数据绑定** 的小型脚本语言。受 GDScript 启发，但更克制、更易读，可直接转译为 TypeScript。
 
-> 当前版本：**0.1.2**。可从 GitHub 克隆运行，也可作为 npm 包独立安装；详见 `docs/syntax-guide.md`。
+> 当前版本：**0.2.0**。可从 GitHub 克隆运行，也可作为 npm 包独立安装；详见 `docs/syntax-guide.md`。
 
 > **不是让程序员觉得厉害的语言，而是让普通人第一次看到就敢写第二行的语言。**
 
@@ -136,7 +136,7 @@ GA-100 验收边界与本轮证据见 [`docs/ga-contract.md`](docs/ga-contract.m
 npx --yes github:harryrimPod/badodo-script run examples/door.bds
 ```
 
-或下载 [v0.1.2 Release](https://github.com/harryrimPod/badodo-script/releases/tag/v0.1.2) 的 `bds.exe`：
+或下载 [v0.2.0 Release](https://github.com/harryrimPod/badodo-script/releases/tag/v0.2.0) 的 `bds.exe`：
 
 ```powershell
 .\bds.exe run examples/door.bds
@@ -220,6 +220,7 @@ node dist/cli.js pack examples/door.bds -k "a-production-key-at-least-16-chars" 
 ```bash
 npm test               # 编译测试（11 项）
 npm run test:runtime   # 运行时端到端测试（10 项）
+npm run test:bounded-runtime # bounded runtime 限额/逃逸/宿主失败测试
 npm run test:wasm      # WASM 后端测试（5 项）
 npm run test:types     # Phase 1 类型检查测试
 npm run test:conformance # Phase 0 能力/Normalized IR 测试

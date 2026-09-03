@@ -9,6 +9,7 @@ import {
   CompileCache,
   compile,
   compileToWasm,
+  compileRuntime,
   clearRuntimeCompilationCache,
   runtimeCompilationCacheSize,
 } from "../dist/index.js";
@@ -43,10 +44,10 @@ try {
   const runtime = new BadodoRuntime();
   const rotor = { rotate_y() {} };
   runtime.registerNode("rotor", rotor);
-  const code = "onFrame((time) => { rotor.rotate_y(time); });";
-  runtime.runCompiled(code, ["rotor"]);
+  const program = compileRuntime("every frame:\n    rotor.rotate_y(time)");
+  runtime.runProgram(program);
   const firstExecutorCacheSize = runtimeCompilationCacheSize();
-  runtime.runCompiled(code, ["rotor"]);
+  runtime.runProgram(program);
   assert.equal(runtimeCompilationCacheSize(), firstExecutorCacheSize);
   const tick = timed(() => {
     for (let i = 0; i < 10000; i += 1) runtime.tick(1 / 60);
@@ -65,7 +66,7 @@ try {
     wasmColdMs: Number(wasmCold.ms.toFixed(3)),
     wasmWarmMs: Number(wasmWarm.ms.toFixed(3)),
   }, null, 2));
-  console.log("Performance smoke passed: compile cache, executor cache, low-allocation ticks, and WABT reuse");
+  console.log("Performance smoke passed: compile cache, bounded runtime, low-allocation ticks, and WABT reuse");
 } finally {
   fs.rmSync(cacheDir, { recursive: true, force: true });
 }

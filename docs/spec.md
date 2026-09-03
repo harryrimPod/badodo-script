@@ -455,6 +455,19 @@ let first = items[0];
 items[1] = 5;
 ```
 
+#### 6.4.1 List 规范同步（Task11 canonical 同步）
+
+`[expr, ...]` 为 canonical List 语法，AST 载体为 `ArrayLiteral { elements: Expr[] }`，语义注册 ID 为 `collection.list`。两者为同一语义的两面，不分叉：`ArrayLiteral` 不变，`collection.list` 为 registry 侧别名。语言项目此前无 `TypedHirNode`、`Visual-Safe`、`parametric registry`、`text.concat` 命名函数，本节为首次权威记录，不引入 `List<T>`、`union`、`Any`、top/bottom 新类型。
+
+- 有序元素：`parser.parseArrayLiteral`、`generator`、`runtime/collect-nodes`、`RuntimeExecutor` 均按源码顺序保留与遍历元素。
+- Arity 模型为 `PARAMETRIC`：`MIN 0`，`MAX PARAMETRIC`。`[]` 合法，上界无固定值，registry 不得展开为 `input1 ... inputN`，不得为 List 在 registry core 开特例。
+- 类型模型为 `array<element>`，复用 `src/type-checker.ts merge()` 与 `unknown` 语义：同质取公共类型，`i32 + f64 → f64`；`[] → array<unknown>`，不得补 `none`、`0`、`""` 推导元素类型；异质 `[1, "a"]` 有效，保守为 `array<unknown>`，不报错；嵌套 `[[1, 2], [3, 4]] → array<array<i32>>`，递归不展平。
+- 求值顺序为 left-to-right：`RuntimeExecutor` 对 `ArrayLiteral` 按序 `evaluate` 每个元素，每次求值产生新的 `RuntimeValue[]`。
+- Runtime 表示为 JS `Array`：支持 `length` 只读、`[index]` 读写、`for-in` 遍历数组或字符串。`WASM` 纯计算子集不支持 `ArrayLiteral`，`isPureExpr` 直接返回 `false`。
+- SourceMap 为行级：`sourcemap.ts` 只映射 `generatedLine → sourceLine`，列统一为 `0`。List 容器与元素共享语句行映射，单行与多行写法均可回映射到 `.bds` 行，不承诺元素级列精度。
+- 参数化签名采纳 domain-neutral `parametric ordered inputs` 模型，要求 registry 以有序参数数组表达，不写死 `inputN` 字段。既有固定签名不受影响：BDS core 无 `text.concat` 命名函数，`BinaryOp +` 的字符串拼接保持 binary，不推导 `text.concat(a, b, c)` 或展平 concat 链，variadic Text Join 仍为未来独立语言设计问题，`EXPECTED: NO`。
+- Visual-Safe 边界：`BDS Full ⊃ BDS Visual-Safe`。List 容器语义可为 Visual-Safe，子表达式不必然 Visual-Safe。合法但图形不支持的子表达式必须原样保留、可往返，图形工具不得静默丢弃，不得改写语义。
+
 ---
 
 ## 7. 场景节点

@@ -70,7 +70,7 @@ npx bds run examples/door.bds
 npm run verify
 ```
 
-当前发布基线为 **0.1.2 GA-100**，已在 GitHub 公开发布（`harryrimPod/badodo-script`）。GA-100 表示 Badodo 引擎工具边界内的技术契约已具备自动化证据；npm 发布为可选后续步骤。本版加入编译缓存、runtime 热路径优化、WASM WABT 复用和轻量 core 分发。
+当前发布基线为 **0.2.0**，已在 GitHub 公开发布（`harryrimPod/badodo-script`）。GA-100 表示 Badodo 引擎工具边界内的技术契约已具备自动化证据；npm 发布为可选后续步骤。0.2.0 引入 bounded structured runtime（`RuntimeProgram` + `RuntimeExecutor`，不再对生成 JS 求值），加密 payload 携带 `runtimeProgram`，并记录 canonical List 语义。
 
 ### 项目状态
 
@@ -156,13 +156,13 @@ Run the full verification suite:
 npm run verify
 ```
 
-The current release baseline is **0.1.2 GA-100**, published on GitHub (`harryrimPod/badodo-script`). GA-100 means the bounded Badodo engine-tool contract has repeatable technical evidence; npm publication is an optional next step. New in v0.1.2: compile caching, runtime hot-path optimization, WABT reuse, and a lightweight core distribution.
+The current release baseline is **0.2.0**, published on GitHub (`harryrimPod/badodo-script`). GA-100 means the bounded Badodo engine-tool contract has repeatable technical evidence; npm publication is an optional next step. New in v0.2.0: bounded structured runtime (`RuntimeProgram` + `RuntimeExecutor`, no generated-JS evaluation), `runtimeProgram` inside encrypted payloads, and canonical List semantics documentation.
 
 ### Project status
 
 - Local TypeScript, Chromium + Babylon WebGL2, MapLibre WebGL2, Go, .NET, Godot, LSP, WASM, and isolated npm-install checks are passing; remote GitHub Actions CI is green.
 - GitHub is public: `https://github.com/harryrimPod/badodo-script` (`main` + `v0.1.0` Release).
-- npm publication is optional; APIs, adapters, and packaging formats follow the `0.1.x` preview compatibility policy.
+- npm publication is optional; APIs, adapters, and packaging formats follow the `0.2.x` preview compatibility policy.
 
 ### License
 
@@ -196,4 +196,5 @@ Babylon.js, MapLibre GL JS, TypeScript, Playwright, esbuild, WABT, and other thi
 - [x] GitHub Release `v0.1.0` published (`main` + tag + notes from this document)
 - [x] `v0.1.1`: `bds run` + `docs/syntax-guide.md` ready
 - [x] `v0.1.2`: compile cache, runtime hot paths, WABT reuse, and core distribution ready
+- [x] `v0.2.0`: bounded structured runtime, `runtimeProgram` payloads, canonical List semantics ready
 - [ ] Configure `NPM_TOKEN` and trigger `release.yml` to publish to npm (optional)

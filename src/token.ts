@@ -95,5 +95,5 @@ const KEYWORDS: Record<string, TokenType> = {
 };
 
 export function keywordOrIdent(name: string): TokenType {
-  return KEYWORDS[name] ?? TokenType.IDENT;
+  return Object.prototype.hasOwnProperty.call(KEYWORDS, name) ? KEYWORDS[name] : TokenType.IDENT;
 }

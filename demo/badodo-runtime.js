@@ -22,9 +22,13 @@ var Badodo = (() => {
   var browser_exports = {};
   __export(browser_exports, {
     BadodoRuntime: () => BadodoRuntime,
+    RUNTIME_PROGRAM_VERSION: () => RUNTIME_PROGRAM_VERSION,
+    RuntimeExecutionError: () => RuntimeExecutionError,
+    assertRuntimeProgram: () => assertRuntimeProgram,
     bridgeMapEvents: () => bridgeMapEvents,
     bridgeMarkerClick: () => bridgeMarkerClick,
     bridgeMeshClick: () => bridgeMeshClick,
+    compileRuntime: () => compileRuntime,
     createCameraNode: () => createCameraNode,
     createCircleLayerNode: () => createCircleLayerNode,
     createLayerNode: () => createLayerNode,
@@ -46,206 +50,6 @@ var Badodo = (() => {
     verifySignedArtifactBrowser: () => verifySignedArtifactBrowser,
     verifySignedArtifactBrowserWithKeyring: () => verifySignedArtifactBrowserWithKeyring
   });
-
-  // src/payload.ts
-  var BDS_PAYLOAD_VERSION = 1;
-  var PayloadValidationErrorException = class extends Error {
-    errors;
-    constructor(errors) {
-      super(`BDS payload \u6821\u9A8C\u5931\u8D25: ${errors.map((error) => `${error.path} ${error.message}`).join("; ")}`);
-      this.name = "PayloadValidationErrorException";
-      this.errors = errors;
-    }
-  };
-  function validateBdsPayload(value, expectedVersion = BDS_PAYLOAD_VERSION) {
-    const errors = [];
-    if (value === null || typeof value !== "object" || Array.isArray(value)) {
-      return { valid: false, errors: [{ path: "$", keyword: "type", message: "payload \u5FC5\u987B\u662F object" }] };
-    }
-    const object = value;
-    const required = ["version", "nodeNames", "code"];
-    for (const key of required) {
-      if (!Object.prototype.hasOwnProperty.call(object, key)) {
-        errors.push({ path: `$.${key}`, keyword: "required", message: "\u5B57\u6BB5\u7F3A\u5931" });
-      }
-    }
-    for (const key of Object.keys(object).sort()) {
-      if (!required.includes(key)) {
-        errors.push({ path: `$.${key}`, keyword: "additionalProperties", message: "\u4E0D\u5141\u8BB8\u989D\u5916\u5B57\u6BB5" });
-      }
-    }
-    if (Object.prototype.hasOwnProperty.call(object, "version")) {
-      if (typeof object.version !== "number" || !Number.isInteger(object.version)) {
-        errors.push({ path: "$.version", keyword: "type", message: "version \u5FC5\u987B\u662F\u6574\u6570" });
-      } else if (object.version !== expectedVersion) {
-        errors.push({ path: "$.version", keyword: "version", message: `\u4E0D\u652F\u6301\u7684 payload version: ${object.version}` });
-      }
-    }
-    if (Object.prototype.hasOwnProperty.call(object, "nodeNames")) {
-      if (!Array.isArray(object.nodeNames)) {
-        errors.push({ path: "$.nodeNames", keyword: "type", message: "nodeNames \u5FC5\u987B\u662F\u6570\u7EC4" });
-      } else {
-        const seen = /* @__PURE__ */ new Set();
-        for (let index = 0; index < object.nodeNames.length; index++) {
-          const name = object.nodeNames[index];
-          const path = `$.nodeNames[${index}]`;
-          if (typeof name !== "string") {
-            errors.push({ path, keyword: "string", message: "\u8282\u70B9\u540D\u5FC5\u987B\u662F\u5B57\u7B26\u4E32" });
-            continue;
-          }
-          if (name.length === 0) errors.push({ path, keyword: "string", message: "\u8282\u70B9\u540D\u4E0D\u80FD\u4E3A\u7A7A" });
-          if (seen.has(name)) errors.push({ path, keyword: "duplicate", message: `\u8282\u70B9\u540D\u91CD\u590D: ${name}` });
-          seen.add(name);
-        }
-      }
-    }
-    if (Object.prototype.hasOwnProperty.call(object, "code") && typeof object.code !== "string") {
-      errors.push({ path: "$.code", keyword: "type", message: "code \u5FC5\u987B\u662F\u5B57\u7B26\u4E32" });
-    }
-    return { valid: errors.length === 0, errors };
-  }
-  function assertBdsPayload(value, expectedVersion = BDS_PAYLOAD_VERSION) {
-    const result = validateBdsPayload(value, expectedVersion);
-    if (!result.valid) throw new PayloadValidationErrorException(result.errors);
-    return value;
-  }
-
-  // src/runtime/signed.ts
-  var LICENSE_FORMAT = "BDS-LICENSE-1";
-  var ARTIFACT_FORMAT = "BDS-SIGNED-1";
-  var ALGORITHM = "Ed25519";
-  var VERSION = 1;
-  async function verifySignedArtifactBrowser(input, publicKeyPem, now = /* @__PURE__ */ new Date(), requiredFeature) {
-    const artifact = assertArtifact(input);
-    const publicKeyDer = pemToDer(publicKeyPem, "PUBLIC KEY");
-    const publicKey = await crypto.subtle.importKey("spki", asArrayBuffer(publicKeyDer), { name: ALGORITHM }, false, ["verify"]);
-    const keyId = await publicKeyId(publicKeyDer);
-    if (artifact.keyId !== keyId || artifact.license.claims.keyId !== keyId) throw new Error("artifact keyId \u4E0E\u9A8C\u8BC1\u516C\u94A5\u4E0D\u5339\u914D");
-    const claims = normalizeClaims(artifact.license.claims);
-    const licenseSignatureValid = await crypto.subtle.verify(
-      { name: ALGORITHM },
-      publicKey,
-      asArrayBuffer(decodeBase64Url(artifact.license.signature)),
-      asArrayBuffer(textBytes(`BDS-LICENSE-SIGNATURE
-${canonicalJson(claims)}`))
-    );
-    if (!licenseSignatureValid) throw new Error("license \u7B7E\u540D\u6821\u9A8C\u5931\u8D25");
-    const nowMs = now.getTime();
-    if (!Number.isFinite(nowMs)) throw new Error("\u9A8C\u8BC1\u65F6\u95F4\u65E0\u6548");
-    if (nowMs < Date.parse(claims.issuedAt)) throw new Error("license \u5C1A\u672A\u751F\u6548");
-    if (nowMs > Date.parse(claims.expiresAt)) throw new Error("license \u5DF2\u8FC7\u671F");
-    if (requiredFeature !== void 0 && !claims.features.includes(requiredFeature)) throw new Error(`license \u7F3A\u5C11 feature: ${requiredFeature}`);
-    const payload = decodeBase64(artifact.payload);
-    if (await sha256(payload) !== artifact.payloadSha256) throw new Error("artifact payload hash \u6821\u9A8C\u5931\u8D25");
-    const unsigned = { ...artifact };
-    delete unsigned.signature;
-    const artifactSignatureValid = await crypto.subtle.verify(
-      { name: ALGORITHM },
-      publicKey,
-      asArrayBuffer(decodeBase64Url(artifact.signature)),
-      asArrayBuffer(textBytes(`BDS-ARTIFACT-SIGNATURE
-${canonicalJson(unsigned)}`))
-    );
-    if (!artifactSignatureValid) throw new Error("artifact \u7B7E\u540D\u6821\u9A8C\u5931\u8D25");
-    return { payload: asArrayBuffer(payload), license: claims };
-  }
-  async function verifySignedArtifactBrowserWithKeyring(input, publicKeys, revocations, now = /* @__PURE__ */ new Date(), requiredFeature) {
-    const artifact = assertArtifact(input);
-    const publicKeyPem = publicKeys[artifact.keyId];
-    if (!publicKeyPem) throw new Error(`\u672A\u77E5\u6216\u5DF2\u8F6E\u6362\u7684 license keyId: ${artifact.keyId}`);
-    const result = await verifySignedArtifactBrowser(artifact, publicKeyPem, now, requiredFeature);
-    if (revocations) {
-      if (revocations.version !== 1) throw new Error("revocation list \u683C\u5F0F\u65E0\u6548");
-      if (revocations.revokedKeyIds.includes(artifact.keyId)) throw new Error("artifact \u7B7E\u53D1\u5BC6\u94A5\u5DF2\u540A\u9500");
-      if (revocations.revokedSubjects.includes(result.license.subject)) throw new Error("artifact license subject \u5DF2\u540A\u9500");
-      if (revocations.revokedArtifacts.includes(artifact.payloadSha256)) throw new Error("artifact \u5DF2\u540A\u9500");
-    }
-    return { ...result, keyId: artifact.keyId };
-  }
-  function assertArtifact(value) {
-    if (!value || typeof value !== "object" || Array.isArray(value)) throw new Error("signed artifact \u5FC5\u987B\u662F object");
-    const object = value;
-    exactKeys(object, ["algorithm", "format", "keyId", "license", "payload", "payloadSha256", "signature"]);
-    if (object.format !== ARTIFACT_FORMAT || object.algorithm !== ALGORITHM) throw new Error("\u4E0D\u652F\u6301\u7684 artifact format/algorithm");
-    if (typeof object.keyId !== "string" || typeof object.payload !== "string" || typeof object.payloadSha256 !== "string" || typeof object.signature !== "string") throw new Error("signed artifact \u5B57\u6BB5\u65E0\u6548");
-    if (!/^[0-9a-f]{64}$/.test(object.payloadSha256)) throw new Error("payloadSha256 \u65E0\u6548");
-    assertLicense(object.license);
-    decodeBase64(object.payload);
-    decodeBase64Url(object.signature);
-    return object;
-  }
-  function assertLicense(value) {
-    if (!value || typeof value !== "object" || Array.isArray(value)) throw new Error("license envelope \u5FC5\u987B\u662F object");
-    const object = value;
-    exactKeys(object, ["algorithm", "claims", "format", "signature"]);
-    if (object.format !== LICENSE_FORMAT || object.algorithm !== ALGORITHM || typeof object.signature !== "string") throw new Error("license envelope \u65E0\u6548");
-  }
-  function normalizeClaims(value) {
-    if (!value || typeof value !== "object" || Array.isArray(value)) throw new Error("license claims \u5FC5\u987B\u662F object");
-    const object = value;
-    exactKeys(object, ["expiresAt", "features", "issuedAt", "keyId", "subject", "version"]);
-    if (object.version !== VERSION || typeof object.keyId !== "string" || !object.keyId || typeof object.subject !== "string" || !object.subject.trim()) throw new Error("license claims \u65E0\u6548");
-    const issuedAt = normalizeDate(object.issuedAt);
-    const expiresAt = normalizeDate(object.expiresAt);
-    if (Date.parse(expiresAt) <= Date.parse(issuedAt)) throw new Error("license expiresAt \u5FC5\u987B\u665A\u4E8E issuedAt");
-    if (!Array.isArray(object.features) || object.features.some((feature) => typeof feature !== "string" || !feature.trim())) throw new Error("license features \u65E0\u6548");
-    const features = [...new Set(object.features.map((feature) => feature.trim()))].sort();
-    return { version: VERSION, keyId: object.keyId, subject: object.subject.trim(), issuedAt, expiresAt, features };
-  }
-  function normalizeDate(value) {
-    const date = typeof value === "string" ? new Date(value) : /* @__PURE__ */ new Date(NaN);
-    if (!Number.isFinite(date.getTime())) throw new Error("license \u65E5\u671F\u65E0\u6548");
-    return date.toISOString();
-  }
-  function exactKeys(object, expected) {
-    const actual = Object.keys(object).sort();
-    const wanted = [...expected].sort();
-    if (actual.length !== wanted.length || actual.some((key, index) => key !== wanted[index])) throw new Error("signed artifact \u5305\u542B\u672A\u77E5\u6216\u7F3A\u5931\u5B57\u6BB5");
-  }
-  function pemToDer(pem, label) {
-    if (typeof pem !== "string") throw new Error("\u516C\u94A5 PEM \u65E0\u6548");
-    const body = pem.replace(`-----BEGIN ${label}-----`, "").replace(`-----END ${label}-----`, "").replace(/\s+/g, "");
-    if (!/^[A-Za-z0-9+/]+={0,2}$/.test(body)) throw new Error("\u516C\u94A5 PEM \u65E0\u6548");
-    return decodeBase64(body);
-  }
-  function decodeBase64(value) {
-    if (!/^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$/.test(value)) throw new Error("base64 payload \u65E0\u6548");
-    const binary = atob(value);
-    return Uint8Array.from(binary, (character) => character.charCodeAt(0));
-  }
-  function decodeBase64Url(value) {
-    if (!/^[A-Za-z0-9_-]+$/.test(value)) throw new Error("base64url \u7B7E\u540D\u65E0\u6548");
-    return decodeBase64(value.replace(/-/g, "+").replace(/_/g, "/").padEnd(Math.ceil(value.length / 4) * 4, "="));
-  }
-  async function publicKeyId(der) {
-    const digest = new Uint8Array(await crypto.subtle.digest("SHA-256", asArrayBuffer(der)));
-    return `ed25519-${[...digest].slice(0, 8).map((byte) => byte.toString(16).padStart(2, "0")).join("")}`;
-  }
-  async function sha256(value) {
-    const digest = new Uint8Array(await crypto.subtle.digest("SHA-256", asArrayBuffer(value)));
-    return [...digest].map((byte) => byte.toString(16).padStart(2, "0")).join("");
-  }
-  function textBytes(value) {
-    return new TextEncoder().encode(value);
-  }
-  function asArrayBuffer(value) {
-    const copy = new Uint8Array(value.byteLength);
-    copy.set(value);
-    return copy.buffer;
-  }
-  function canonicalJson(value) {
-    if (value === null || typeof value === "boolean" || typeof value === "string") return JSON.stringify(value);
-    if (typeof value === "number") {
-      if (!Number.isFinite(value)) throw new Error("canonical JSON \u4E0D\u652F\u6301\u975E\u6709\u9650\u6570\u5B57");
-      return JSON.stringify(value);
-    }
-    if (Array.isArray(value)) return `[${value.map(canonicalJson).join(",")}]`;
-    if (typeof value === "object") {
-      const object = value;
-      return `{${Object.keys(object).sort().map((key) => `${JSON.stringify(key)}:${canonicalJson(object[key])}`).join(",")}}`;
-    }
-    throw new Error("canonical JSON \u4E0D\u652F\u6301\u8BE5\u503C");
-  }
 
   // src/token.ts
   var KEYWORDS = {
@@ -274,7 +78,7 @@ ${canonicalJson(unsigned)}`))
     null: "NULL" /* NULL */
   };
   function keywordOrIdent(name) {
-    return KEYWORDS[name] ?? "IDENT" /* IDENT */;
+    return Object.prototype.hasOwnProperty.call(KEYWORDS, name) ? KEYWORDS[name] : "IDENT" /* IDENT */;
   }
 
   // src/lexer.ts
@@ -1068,294 +872,6 @@ ${canonicalJson(unsigned)}`))
     return new Parser(tokens).parse();
   }
 
-  // src/generator.ts
-  var TypeScriptGenerator = class {
-    indentLevel = 0;
-    output = "";
-    mappings = [];
-    knownTypes = /* @__PURE__ */ new Set();
-    options;
-    constructor(options = {}) {
-      this.options = { emitTypes: options.emitTypes === true };
-    }
-    generate(node) {
-      this.output = "";
-      this.mappings = [];
-      this.knownTypes = new Set(node.body.filter((stmt) => stmt.kind === "TypeDecl" || stmt.kind === "EnumDecl" || stmt.kind === "SharedDecl").map((stmt) => stmt.name));
-      for (const stmt of node.body) {
-        this.writeStmt(stmt);
-        this.output += "\n";
-      }
-      return this.output.trim();
-    }
-    getMappings() {
-      return this.mappings;
-    }
-    currentLine() {
-      let line = 1;
-      for (let i = 0; i < this.output.length; i++) {
-        if (this.output[i] === "\n") line++;
-      }
-      return line;
-    }
-    writeStmt(stmt) {
-      if (stmt.kind === "SharedDecl" || stmt.kind === "TypeDecl" && !this.options.emitTypes) return;
-      this.mappings.push({ generatedLine: this.currentLine(), sourceLine: stmt.line });
-      this.writeIndent();
-      switch (stmt.kind) {
-        case "TypeDecl": {
-          if (this.options.emitTypes) {
-            this.output += `interface ${stmt.name} {
-`;
-            this.indentLevel++;
-            for (const field of stmt.fields) {
-              this.writeIndent();
-              this.output += `${field.name}${field.optional ? "?" : ""}: ${typeRefToTypeScript(field.type, this.knownTypes)};
-`;
-            }
-            this.indentLevel--;
-            this.writeIndent();
-            this.output += "}";
-          }
-          break;
-        }
-        case "EnumDecl":
-          this.output += `const ${stmt.name} = Object.freeze({ ${stmt.values.map((value) => `${value}: ${JSON.stringify(value)}`).join(", ")} });`;
-          break;
-        case "ImportDecl": {
-          const named = stmt.names.length > 0 ? `{ ${stmt.names.map((item) => item.imported === item.local ? item.imported : `${item.imported} as ${item.local}`).join(", ")} }` : "";
-          const bindings = [stmt.defaultImport, named].filter(Boolean).join(", ");
-          this.output += bindings ? `import ${bindings} from ${JSON.stringify(stmt.source)};` : `import ${JSON.stringify(stmt.source)};`;
-          break;
-        }
-        case "VarDecl":
-          this.output += `let ${stmt.name}${this.writeTypeAnnotation(stmt.typeAnnotation)} = ${this.writeExpr(stmt.value)};`;
-          break;
-        case "Assign":
-          this.output += `${this.writeExpr(stmt.target)} = ${this.writeExpr(stmt.value)};`;
-          break;
-        case "If": {
-          this.output += `if (${this.writeExpr(stmt.condition)}) {
-`;
-          this.indentLevel++;
-          this.writeBlock(stmt.thenBlock);
-          this.indentLevel--;
-          this.writeIndent();
-          this.output += "}";
-          if (stmt.elseBlock) {
-            this.output += " else {\n";
-            this.indentLevel++;
-            this.writeBlock(stmt.elseBlock);
-            this.indentLevel--;
-            this.writeIndent();
-            this.output += "}";
-          }
-          break;
-        }
-        case "Repeat": {
-          const count = this.writeExpr(stmt.count);
-          this.output += `for (let __i = 0; __i < ${count}; __i++) {
-`;
-          this.indentLevel++;
-          this.writeBlock(stmt.body);
-          this.indentLevel--;
-          this.writeIndent();
-          this.output += "}";
-          break;
-        }
-        case "FuncDef": {
-          const params = stmt.params.map((name, index) => `${name}${this.writeTypeAnnotation(stmt.paramTypes?.[index])}`).join(", ");
-          const returnType = this.options.emitTypes && stmt.returnType ? `: ${stmt.async ? `Promise<${typeRefToTypeScript(stmt.returnType, this.knownTypes)}>` : typeRefToTypeScript(stmt.returnType, this.knownTypes)}` : "";
-          this.output += `${stmt.async ? "async " : ""}function ${stmt.name}(${params})${returnType} {
-`;
-          this.indentLevel++;
-          this.writeBlock(stmt.body);
-          this.indentLevel--;
-          this.writeIndent();
-          this.output += "}";
-          break;
-        }
-        case "Return": {
-          if (stmt.value) {
-            this.output += `return ${this.writeExpr(stmt.value)};`;
-          } else {
-            this.output += "return;";
-          }
-          break;
-        }
-        case "When": {
-          const target = this.writeExpr(stmt.target);
-          this.output += `on(${target}, "${stmt.event}", () => {
-`;
-          this.indentLevel++;
-          this.writeBlock(stmt.body);
-          this.indentLevel--;
-          this.writeIndent();
-          this.output += "});";
-          break;
-        }
-        case "BindStmt": {
-          const source = this.writeExpr(stmt.source);
-          const target = stmt.target;
-          const node = this.writeExpr(target.object);
-          const prop = target.member;
-          this.output += `bind(() => ${source}, ${node}, "${prop}");`;
-          break;
-        }
-        case "WatchStmt": {
-          const source = this.writeExpr(stmt.source);
-          this.output += `watch(() => ${source}, (value) => {
-`;
-          this.indentLevel++;
-          this.writeBlock(stmt.body);
-          this.indentLevel--;
-          this.writeIndent();
-          this.output += "});";
-          break;
-        }
-        case "EveryFrame": {
-          this.output += "onFrame((time) => {\n";
-          this.indentLevel++;
-          this.writeBlock(stmt.body);
-          this.indentLevel--;
-          this.writeIndent();
-          this.output += "});";
-          break;
-        }
-        case "Animate": {
-          const value = this.writeExpr(stmt.value);
-          const duration = this.writeExpr(stmt.duration);
-          if (stmt.target.kind === "MemberAccess") {
-            const node = this.writeExpr(stmt.target.object);
-            const prop = stmt.target.member;
-            this.output += `animate(${node}, "${prop}", ${value}, ${duration});`;
-          } else {
-            const node = stmt.target.name;
-            this.output += `animateTo(${node}, ${value}, ${duration});`;
-          }
-          break;
-        }
-        case "ForIn": {
-          const iterable = this.writeExpr(stmt.iterable);
-          this.output += `for (const ${stmt.item} of ${iterable}) {
-`;
-          this.indentLevel++;
-          this.writeBlock(stmt.body);
-          this.indentLevel--;
-          this.writeIndent();
-          this.output += "}";
-          break;
-        }
-        case "ExpressionStmt":
-          this.output += `${this.writeExpr(stmt.expression)};`;
-          break;
-      }
-    }
-    writeBlock(block) {
-      if (block.body.length === 0) {
-        this.writeIndent();
-        this.output += "// no-op\n";
-        return;
-      }
-      for (const stmt of block.body) {
-        this.writeStmt(stmt);
-        this.output += "\n";
-      }
-    }
-    writeExpr(expr, parentPrecedence = 0, samePrecedenceNeedsParens = false) {
-      switch (expr.kind) {
-        case "Literal":
-          return this.writeLiteral(expr.value);
-        case "Identifier":
-          return expr.name;
-        case "MemberAccess": {
-          const text = `${this.writeExpr(expr.object, 5)}.${expr.member}`;
-          return 5 < parentPrecedence ? `(${text})` : text;
-        }
-        case "IndexAccess": {
-          const text = `${this.writeExpr(expr.object, 5)}[${this.writeExpr(expr.index)}]`;
-          return 5 < parentPrecedence ? `(${text})` : text;
-        }
-        case "ArrayLiteral":
-          return `[${expr.elements.map((e) => this.writeExpr(e)).join(", ")}]`;
-        case "MapLiteral": {
-          const text = `{ ${expr.entries.map((entry) => `${JSON.stringify(entry.key)}: ${this.writeExpr(entry.value)}`).join(", ")} }`;
-          return 5 < parentPrecedence ? `(${text})` : text;
-        }
-        case "AwaitExpr": {
-          const text = `await ${this.writeExpr(expr.operand, 4)}`;
-          return 4 < parentPrecedence ? `(${text})` : text;
-        }
-        case "Call": {
-          const callee = this.writeExpr(expr.callee, 5);
-          const args = expr.args.map((arg) => this.writeExpr(arg)).join(", ");
-          const text = `${callee}(${args})`;
-          return 5 < parentPrecedence ? `(${text})` : text;
-        }
-        case "BinaryOp": {
-          const precedence = binaryPrecedence(expr.op);
-          const leftNeedsParens = precedence === 1 && expr.left.kind === "BinaryOp" && binaryPrecedence(expr.left.op) === precedence;
-          const text = `${this.writeExpr(expr.left, precedence, leftNeedsParens)} ${expr.op} ${this.writeExpr(expr.right, precedence, true)}`;
-          return precedence < parentPrecedence || precedence === parentPrecedence && samePrecedenceNeedsParens ? `(${text})` : text;
-        }
-        case "UnaryOp": {
-          const precedence = 4;
-          const operandNeedsParens = expr.operand.kind === "UnaryOp";
-          const text = `${expr.op}${this.writeExpr(expr.operand, precedence, operandNeedsParens)}`;
-          return precedence < parentPrecedence || precedence === parentPrecedence && samePrecedenceNeedsParens ? `(${text})` : text;
-        }
-      }
-    }
-    writeLiteral(value) {
-      if (value === null) return "null";
-      if (typeof value === "string") return JSON.stringify(value);
-      return String(value);
-    }
-    writeTypeAnnotation(type) {
-      if (!this.options.emitTypes || !type) return "";
-      return `: ${typeRefToTypeScript(type, this.knownTypes)}`;
-    }
-    writeIndent() {
-      this.output += "  ".repeat(this.indentLevel);
-    }
-  };
-  function binaryPrecedence(operator) {
-    if (operator === "*" || operator === "/") return 3;
-    if (operator === "+" || operator === "-") return 2;
-    return 1;
-  }
-  function generateTypeScript(ast, options = {}) {
-    return new TypeScriptGenerator(options).generate(ast);
-  }
-  function typeRefToTypeScript(type, knownTypes = /* @__PURE__ */ new Set()) {
-    switch (type.name) {
-      case "bool":
-        return "boolean";
-      case "i32":
-      case "f64":
-      case "number":
-        return "number";
-      case "string":
-        return "string";
-      case "bytes":
-        return "Uint8Array";
-      case "null":
-        return "null";
-      case "array":
-        return "unknown[]";
-      case "map":
-        return "Record<string, unknown>";
-      case "option":
-        return "Option<unknown>";
-      case "result":
-        return "Result<unknown, unknown>";
-      case "unit":
-        return "void";
-      default:
-        return knownTypes.has(type.name) ? type.name : "unknown";
-    }
-  }
-
   // src/runtime/collect-nodes.ts
   var RESERVED = /* @__PURE__ */ new Set(["time", "value", "delta", "vec3", "color", "some", "none", "ok", "err", "is_ok", "unwrap"]);
   function collectNodes(program) {
@@ -1563,13 +1079,936 @@ ${canonicalJson(unsigned)}`))
     }
   }
 
+  // src/runtime/errors.ts
+  var RuntimeExecutionError = class extends Error {
+    code;
+    line;
+    constructor(code, message, line, cause) {
+      super(message, cause === void 0 ? void 0 : { cause });
+      this.name = "RuntimeExecutionError";
+      this.code = code;
+      this.line = line;
+    }
+  };
+  function asRuntimeHostFailure(error, operation, line) {
+    if (error instanceof RuntimeExecutionError) return error;
+    const message = error instanceof Error ? error.message : String(error);
+    return new RuntimeExecutionError("RUNTIME_HOST_FAILURE", `${operation} \u5931\u8D25: ${message}`, line, error);
+  }
+
+  // src/runtime/program.ts
+  var RUNTIME_PROGRAM_VERSION = 1;
+  var UNSAFE_NAMES = /* @__PURE__ */ new Set([
+    "__proto__",
+    "prototype",
+    "constructor",
+    "globalThis",
+    "process",
+    "require",
+    "module",
+    "Function",
+    "eval",
+    "window",
+    "document"
+  ]);
+  var AST_KINDS = /* @__PURE__ */ new Set([
+    "Program",
+    "Block",
+    "VarDecl",
+    "Assign",
+    "If",
+    "Repeat",
+    "FuncDef",
+    "Return",
+    "When",
+    "BindStmt",
+    "WatchStmt",
+    "EveryFrame",
+    "Animate",
+    "ForIn",
+    "SharedDecl",
+    "TypeDecl",
+    "EnumDecl",
+    "ImportDecl",
+    "ExpressionStmt",
+    "TypeRef",
+    "Call",
+    "MemberAccess",
+    "IndexAccess",
+    "ArrayLiteral",
+    "MapLiteral",
+    "AwaitExpr",
+    "Identifier",
+    "BinaryOp",
+    "UnaryOp",
+    "Literal"
+  ]);
+  function compileRuntime(source, sourceName = "source.bds") {
+    const ast = parse(tokenize(source));
+    const program = {
+      kind: "RuntimeProgram",
+      version: RUNTIME_PROGRAM_VERSION,
+      sourceName,
+      nodeNames: collectNodes(ast),
+      ast
+    };
+    const validation = validateRuntimeProgram(program);
+    if (!validation.valid) {
+      const code = validation.errors.some((error) => error.includes("\u4E0D\u5B89\u5168\u540D\u79F0") || error.includes("nodeNames")) ? "RUNTIME_UNSUPPORTED_OPERATION" : "RUNTIME_PROGRAM_INVALID";
+      throw new RuntimeExecutionError(code, validation.errors.join("; "));
+    }
+    return deepFreeze(program);
+  }
+  function validateRuntimeProgram(value) {
+    const errors = [];
+    if (value === null || typeof value !== "object" || Array.isArray(value)) {
+      return { valid: false, errors: ["RuntimeProgram \u5FC5\u987B\u662F object"] };
+    }
+    const object = value;
+    if (object.kind !== "RuntimeProgram") errors.push("kind \u5FC5\u987B\u662F RuntimeProgram");
+    if (object.version !== RUNTIME_PROGRAM_VERSION) errors.push(`\u4E0D\u652F\u6301\u7684 RuntimeProgram version: ${String(object.version)}`);
+    if (typeof object.sourceName !== "string" || object.sourceName.length === 0) errors.push("sourceName \u5FC5\u987B\u662F\u975E\u7A7A\u5B57\u7B26\u4E32");
+    if (!Array.isArray(object.nodeNames) || object.nodeNames.some((name) => typeof name !== "string" || name.length === 0 || UNSAFE_NAMES.has(name))) {
+      errors.push("nodeNames \u5FC5\u987B\u662F\u5B89\u5168\u7684\u975E\u7A7A\u5B57\u7B26\u4E32\u6570\u7EC4");
+    } else if (new Set(object.nodeNames).size !== object.nodeNames.length) {
+      errors.push("nodeNames \u4E0D\u80FD\u91CD\u590D");
+    }
+    if (!isRecord(object.ast) || object.ast.kind !== "Program" || !Array.isArray(object.ast.body)) {
+      errors.push("ast \u5FC5\u987B\u662F canonical Program");
+    } else {
+      walkAst(object.ast, "$.ast", errors);
+    }
+    return { valid: errors.length === 0, errors };
+  }
+  function assertRuntimeProgram(value) {
+    const result = validateRuntimeProgram(value);
+    if (!result.valid) throw new RuntimeExecutionError("RUNTIME_PROGRAM_INVALID", result.errors.join("; "));
+    return value;
+  }
+  function isUnsafeRuntimeName(name) {
+    return UNSAFE_NAMES.has(name);
+  }
+  function walkAst(value, path, errors) {
+    if (typeof value === "function") {
+      errors.push(`${path} \u4E0D\u80FD\u5305\u542B\u51FD\u6570`);
+      return;
+    }
+    if (Array.isArray(value)) {
+      for (let i = 0; i < value.length; i += 1) walkAst(value[i], `${path}[${i}]`, errors);
+      return;
+    }
+    if (!isRecord(value)) return;
+    if (typeof value.kind === "string" && !AST_KINDS.has(value.kind)) {
+      errors.push(`${path}.kind \u4F7F\u7528\u4E86\u4E0D\u652F\u6301\u7684 AST \u8282\u70B9\u7C7B\u578B\u300C${value.kind}\u300D`);
+    }
+    for (const [key, child] of Object.entries(value)) {
+      if ((key === "name" || key === "member" || key === "key") && typeof child === "string" && isUnsafeRuntimeName(child)) {
+        errors.push(`${path}.${key} \u4F7F\u7528\u4E86\u4E0D\u5B89\u5168\u540D\u79F0\u300C${child}\u300D`);
+      }
+      walkAst(child, `${path}.${key}`, errors);
+    }
+  }
+  function isRecord(value) {
+    return value !== null && typeof value === "object" && !Array.isArray(value);
+  }
+  function deepFreeze(value) {
+    if (value === null || typeof value !== "object") return value;
+    if (Object.isFrozen(value)) return value;
+    Object.freeze(value);
+    for (const child of Object.values(value)) deepFreeze(child);
+    return value;
+  }
+
+  // src/payload.ts
+  var BDS_PAYLOAD_VERSION = 1;
+  var PayloadValidationErrorException = class extends Error {
+    errors;
+    constructor(errors) {
+      super(`BDS payload \u6821\u9A8C\u5931\u8D25: ${errors.map((error) => `${error.path} ${error.message}`).join("; ")}`);
+      this.name = "PayloadValidationErrorException";
+      this.errors = errors;
+    }
+  };
+  function validateBdsPayload(value, expectedVersion = BDS_PAYLOAD_VERSION) {
+    const errors = [];
+    if (value === null || typeof value !== "object" || Array.isArray(value)) {
+      return { valid: false, errors: [{ path: "$", keyword: "type", message: "payload \u5FC5\u987B\u662F object" }] };
+    }
+    const object = value;
+    const required = ["version", "nodeNames", "code"];
+    for (const key of required) {
+      if (!Object.prototype.hasOwnProperty.call(object, key)) {
+        errors.push({ path: `$.${key}`, keyword: "required", message: "\u5B57\u6BB5\u7F3A\u5931" });
+      }
+    }
+    for (const key of Object.keys(object).sort()) {
+      if (!required.includes(key) && key !== "runtimeProgram") {
+        errors.push({ path: `$.${key}`, keyword: "additionalProperties", message: "\u4E0D\u5141\u8BB8\u989D\u5916\u5B57\u6BB5" });
+      }
+    }
+    if (Object.prototype.hasOwnProperty.call(object, "version")) {
+      if (typeof object.version !== "number" || !Number.isInteger(object.version)) {
+        errors.push({ path: "$.version", keyword: "type", message: "version \u5FC5\u987B\u662F\u6574\u6570" });
+      } else if (object.version !== expectedVersion) {
+        errors.push({ path: "$.version", keyword: "version", message: `\u4E0D\u652F\u6301\u7684 payload version: ${object.version}` });
+      }
+    }
+    if (Object.prototype.hasOwnProperty.call(object, "nodeNames")) {
+      if (!Array.isArray(object.nodeNames)) {
+        errors.push({ path: "$.nodeNames", keyword: "type", message: "nodeNames \u5FC5\u987B\u662F\u6570\u7EC4" });
+      } else {
+        const seen = /* @__PURE__ */ new Set();
+        for (let index = 0; index < object.nodeNames.length; index++) {
+          const name = object.nodeNames[index];
+          const path = `$.nodeNames[${index}]`;
+          if (typeof name !== "string") {
+            errors.push({ path, keyword: "string", message: "\u8282\u70B9\u540D\u5FC5\u987B\u662F\u5B57\u7B26\u4E32" });
+            continue;
+          }
+          if (name.length === 0) errors.push({ path, keyword: "string", message: "\u8282\u70B9\u540D\u4E0D\u80FD\u4E3A\u7A7A" });
+          if (seen.has(name)) errors.push({ path, keyword: "duplicate", message: `\u8282\u70B9\u540D\u91CD\u590D: ${name}` });
+          seen.add(name);
+        }
+      }
+    }
+    if (Object.prototype.hasOwnProperty.call(object, "code") && typeof object.code !== "string") {
+      errors.push({ path: "$.code", keyword: "type", message: "code \u5FC5\u987B\u662F\u5B57\u7B26\u4E32" });
+    }
+    if (Object.prototype.hasOwnProperty.call(object, "runtimeProgram")) {
+      const runtimeValidation = validateRuntimeProgram(object.runtimeProgram);
+      if (!runtimeValidation.valid) {
+        for (const message of runtimeValidation.errors) {
+          errors.push({ path: "$.runtimeProgram", keyword: "type", message });
+        }
+      }
+    }
+    return { valid: errors.length === 0, errors };
+  }
+  function assertBdsPayload(value, expectedVersion = BDS_PAYLOAD_VERSION) {
+    const result = validateBdsPayload(value, expectedVersion);
+    if (!result.valid) throw new PayloadValidationErrorException(result.errors);
+    return value;
+  }
+
+  // src/runtime/signed.ts
+  var LICENSE_FORMAT = "BDS-LICENSE-1";
+  var ARTIFACT_FORMAT = "BDS-SIGNED-1";
+  var ALGORITHM = "Ed25519";
+  var VERSION = 1;
+  async function verifySignedArtifactBrowser(input, publicKeyPem, now = /* @__PURE__ */ new Date(), requiredFeature) {
+    const artifact = assertArtifact(input);
+    const publicKeyDer = pemToDer(publicKeyPem, "PUBLIC KEY");
+    const publicKey = await crypto.subtle.importKey("spki", asArrayBuffer(publicKeyDer), { name: ALGORITHM }, false, ["verify"]);
+    const keyId = await publicKeyId(publicKeyDer);
+    if (artifact.keyId !== keyId || artifact.license.claims.keyId !== keyId) throw new Error("artifact keyId \u4E0E\u9A8C\u8BC1\u516C\u94A5\u4E0D\u5339\u914D");
+    const claims = normalizeClaims(artifact.license.claims);
+    const licenseSignatureValid = await crypto.subtle.verify(
+      { name: ALGORITHM },
+      publicKey,
+      asArrayBuffer(decodeBase64Url(artifact.license.signature)),
+      asArrayBuffer(textBytes(`BDS-LICENSE-SIGNATURE
+${canonicalJson(claims)}`))
+    );
+    if (!licenseSignatureValid) throw new Error("license \u7B7E\u540D\u6821\u9A8C\u5931\u8D25");
+    const nowMs = now.getTime();
+    if (!Number.isFinite(nowMs)) throw new Error("\u9A8C\u8BC1\u65F6\u95F4\u65E0\u6548");
+    if (nowMs < Date.parse(claims.issuedAt)) throw new Error("license \u5C1A\u672A\u751F\u6548");
+    if (nowMs > Date.parse(claims.expiresAt)) throw new Error("license \u5DF2\u8FC7\u671F");
+    if (requiredFeature !== void 0 && !claims.features.includes(requiredFeature)) throw new Error(`license \u7F3A\u5C11 feature: ${requiredFeature}`);
+    const payload = decodeBase64(artifact.payload);
+    if (await sha256(payload) !== artifact.payloadSha256) throw new Error("artifact payload hash \u6821\u9A8C\u5931\u8D25");
+    const unsigned = { ...artifact };
+    delete unsigned.signature;
+    const artifactSignatureValid = await crypto.subtle.verify(
+      { name: ALGORITHM },
+      publicKey,
+      asArrayBuffer(decodeBase64Url(artifact.signature)),
+      asArrayBuffer(textBytes(`BDS-ARTIFACT-SIGNATURE
+${canonicalJson(unsigned)}`))
+    );
+    if (!artifactSignatureValid) throw new Error("artifact \u7B7E\u540D\u6821\u9A8C\u5931\u8D25");
+    return { payload: asArrayBuffer(payload), license: claims };
+  }
+  async function verifySignedArtifactBrowserWithKeyring(input, publicKeys, revocations, now = /* @__PURE__ */ new Date(), requiredFeature) {
+    const artifact = assertArtifact(input);
+    const publicKeyPem = publicKeys[artifact.keyId];
+    if (!publicKeyPem) throw new Error(`\u672A\u77E5\u6216\u5DF2\u8F6E\u6362\u7684 license keyId: ${artifact.keyId}`);
+    const result = await verifySignedArtifactBrowser(artifact, publicKeyPem, now, requiredFeature);
+    if (revocations) {
+      if (revocations.version !== 1) throw new Error("revocation list \u683C\u5F0F\u65E0\u6548");
+      if (revocations.revokedKeyIds.includes(artifact.keyId)) throw new Error("artifact \u7B7E\u53D1\u5BC6\u94A5\u5DF2\u540A\u9500");
+      if (revocations.revokedSubjects.includes(result.license.subject)) throw new Error("artifact license subject \u5DF2\u540A\u9500");
+      if (revocations.revokedArtifacts.includes(artifact.payloadSha256)) throw new Error("artifact \u5DF2\u540A\u9500");
+    }
+    return { ...result, keyId: artifact.keyId };
+  }
+  function assertArtifact(value) {
+    if (!value || typeof value !== "object" || Array.isArray(value)) throw new Error("signed artifact \u5FC5\u987B\u662F object");
+    const object = value;
+    exactKeys(object, ["algorithm", "format", "keyId", "license", "payload", "payloadSha256", "signature"]);
+    if (object.format !== ARTIFACT_FORMAT || object.algorithm !== ALGORITHM) throw new Error("\u4E0D\u652F\u6301\u7684 artifact format/algorithm");
+    if (typeof object.keyId !== "string" || typeof object.payload !== "string" || typeof object.payloadSha256 !== "string" || typeof object.signature !== "string") throw new Error("signed artifact \u5B57\u6BB5\u65E0\u6548");
+    if (!/^[0-9a-f]{64}$/.test(object.payloadSha256)) throw new Error("payloadSha256 \u65E0\u6548");
+    assertLicense(object.license);
+    decodeBase64(object.payload);
+    decodeBase64Url(object.signature);
+    return object;
+  }
+  function assertLicense(value) {
+    if (!value || typeof value !== "object" || Array.isArray(value)) throw new Error("license envelope \u5FC5\u987B\u662F object");
+    const object = value;
+    exactKeys(object, ["algorithm", "claims", "format", "signature"]);
+    if (object.format !== LICENSE_FORMAT || object.algorithm !== ALGORITHM || typeof object.signature !== "string") throw new Error("license envelope \u65E0\u6548");
+  }
+  function normalizeClaims(value) {
+    if (!value || typeof value !== "object" || Array.isArray(value)) throw new Error("license claims \u5FC5\u987B\u662F object");
+    const object = value;
+    exactKeys(object, ["expiresAt", "features", "issuedAt", "keyId", "subject", "version"]);
+    if (object.version !== VERSION || typeof object.keyId !== "string" || !object.keyId || typeof object.subject !== "string" || !object.subject.trim()) throw new Error("license claims \u65E0\u6548");
+    const issuedAt = normalizeDate(object.issuedAt);
+    const expiresAt = normalizeDate(object.expiresAt);
+    if (Date.parse(expiresAt) <= Date.parse(issuedAt)) throw new Error("license expiresAt \u5FC5\u987B\u665A\u4E8E issuedAt");
+    if (!Array.isArray(object.features) || object.features.some((feature) => typeof feature !== "string" || !feature.trim())) throw new Error("license features \u65E0\u6548");
+    const features = [...new Set(object.features.map((feature) => feature.trim()))].sort();
+    return { version: VERSION, keyId: object.keyId, subject: object.subject.trim(), issuedAt, expiresAt, features };
+  }
+  function normalizeDate(value) {
+    const date = typeof value === "string" ? new Date(value) : /* @__PURE__ */ new Date(NaN);
+    if (!Number.isFinite(date.getTime())) throw new Error("license \u65E5\u671F\u65E0\u6548");
+    return date.toISOString();
+  }
+  function exactKeys(object, expected) {
+    const actual = Object.keys(object).sort();
+    const wanted = [...expected].sort();
+    if (actual.length !== wanted.length || actual.some((key, index) => key !== wanted[index])) throw new Error("signed artifact \u5305\u542B\u672A\u77E5\u6216\u7F3A\u5931\u5B57\u6BB5");
+  }
+  function pemToDer(pem, label) {
+    if (typeof pem !== "string") throw new Error("\u516C\u94A5 PEM \u65E0\u6548");
+    const body = pem.replace(`-----BEGIN ${label}-----`, "").replace(`-----END ${label}-----`, "").replace(/\s+/g, "");
+    if (!/^[A-Za-z0-9+/]+={0,2}$/.test(body)) throw new Error("\u516C\u94A5 PEM \u65E0\u6548");
+    return decodeBase64(body);
+  }
+  function decodeBase64(value) {
+    if (!/^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$/.test(value)) throw new Error("base64 payload \u65E0\u6548");
+    const binary = atob(value);
+    return Uint8Array.from(binary, (character) => character.charCodeAt(0));
+  }
+  function decodeBase64Url(value) {
+    if (!/^[A-Za-z0-9_-]+$/.test(value)) throw new Error("base64url \u7B7E\u540D\u65E0\u6548");
+    return decodeBase64(value.replace(/-/g, "+").replace(/_/g, "/").padEnd(Math.ceil(value.length / 4) * 4, "="));
+  }
+  async function publicKeyId(der) {
+    const digest = new Uint8Array(await crypto.subtle.digest("SHA-256", asArrayBuffer(der)));
+    return `ed25519-${[...digest].slice(0, 8).map((byte) => byte.toString(16).padStart(2, "0")).join("")}`;
+  }
+  async function sha256(value) {
+    const digest = new Uint8Array(await crypto.subtle.digest("SHA-256", asArrayBuffer(value)));
+    return [...digest].map((byte) => byte.toString(16).padStart(2, "0")).join("");
+  }
+  function textBytes(value) {
+    return new TextEncoder().encode(value);
+  }
+  function asArrayBuffer(value) {
+    const copy = new Uint8Array(value.byteLength);
+    copy.set(value);
+    return copy.buffer;
+  }
+  function canonicalJson(value) {
+    if (value === null || typeof value === "boolean" || typeof value === "string") return JSON.stringify(value);
+    if (typeof value === "number") {
+      if (!Number.isFinite(value)) throw new Error("canonical JSON \u4E0D\u652F\u6301\u975E\u6709\u9650\u6570\u5B57");
+      return JSON.stringify(value);
+    }
+    if (Array.isArray(value)) return `[${value.map(canonicalJson).join(",")}]`;
+    if (typeof value === "object") {
+      const object = value;
+      return `{${Object.keys(object).sort().map((key) => `${JSON.stringify(key)}:${canonicalJson(object[key])}`).join(",")}}`;
+    }
+    throw new Error("canonical JSON \u4E0D\u652F\u6301\u8BE5\u503C");
+  }
+
+  // src/runtime/executor.ts
+  var DEFAULT_RUNTIME_LIMITS = Object.freeze({
+    maxSteps: 1e4,
+    maxLoopIterations: 1e3,
+    maxCallDepth: 64
+  });
+  var Environment = class {
+    constructor(parent) {
+      this.parent = parent;
+    }
+    parent;
+    values = /* @__PURE__ */ new Map();
+    define(name, value) {
+      this.values.set(name, value);
+    }
+    hasLocal(name) {
+      return this.values.has(name);
+    }
+    lookup(name) {
+      if (this.values.has(name)) return this.values.get(name);
+      return this.parent?.lookup(name);
+    }
+    has(name) {
+      return this.values.has(name) || Boolean(this.parent?.has(name));
+    }
+    assign(name, value) {
+      if (this.values.has(name)) {
+        this.values.set(name, value);
+        return;
+      }
+      if (this.parent?.has(name)) {
+        this.parent.assign(name, value);
+        return;
+      }
+      throw new RuntimeExecutionError("RUNTIME_INVALID_VALUE", `\u53D8\u91CF\u300C${name}\u300D\u5C1A\u672A\u58F0\u660E`);
+    }
+  };
+  var ReturnSignal = class {
+    constructor(value) {
+      this.value = value;
+    }
+    value;
+  };
+  var RuntimeExecutor = class {
+    limits;
+    constructor(limits = {}) {
+      this.limits = normalizeLimits(limits);
+    }
+    execute(programInput, host) {
+      const program = assertRuntimeProgram(programInput);
+      const state = this.newState();
+      this.assertExecutableProgram(program, state);
+      const root = new Environment();
+      this.installBuiltins(root);
+      this.predeclareFunctions(program.ast.body, root, state);
+      try {
+        this.executeStatements(program.ast.body, root, state, host);
+      } catch (error) {
+        if (error instanceof ReturnSignal) return;
+        throw this.normalizeRuntimeError(error);
+      }
+    }
+    newState() {
+      return { limits: this.limits, steps: 0, loopIterations: 0, callDepth: 0 };
+    }
+    assertExecutableProgram(program, state) {
+      void state;
+      if (program.ast.body.some((statement) => statement.kind === "ImportDecl")) {
+        throw new RuntimeExecutionError("RUNTIME_UNSUPPORTED_OPERATION", "\u8FD0\u884C\u65F6\u4E0D\u80FD\u76F4\u63A5\u6267\u884C\u5305\u542B import \u7684 BDS\uFF1B\u8BF7\u5148\u7531 bundler \u5904\u7406\u6A21\u5757");
+      }
+      for (const name of program.nodeNames) {
+        if (isUnsafeRuntimeName(name)) {
+          throw new RuntimeExecutionError("RUNTIME_UNSUPPORTED_OPERATION", `\u8282\u70B9\u540D\u79F0\u300C${name}\u300D\u88AB\u8FD0\u884C\u65F6\u5B89\u5168\u7B56\u7565\u62D2\u7EDD`);
+        }
+      }
+    }
+    installBuiltins(environment) {
+      environment.define("vec3", callable("vec3", (args) => {
+        requireArity("vec3", args, 3);
+        return record({ x: requireNumber(args[0], "vec3.x"), y: requireNumber(args[1], "vec3.y"), z: requireNumber(args[2], "vec3.z") });
+      }));
+      environment.define("color", callable("color", (args) => {
+        requireArity("color", args, 3);
+        return record({ r: requireNumber(args[0], "color.r"), g: requireNumber(args[1], "color.g"), b: requireNumber(args[2], "color.b") });
+      }));
+      environment.define("some", callable("some", (args) => {
+        requireArity("some", args, 1);
+        return record({ kind: "some", value: args[0] });
+      }));
+      environment.define("none", callable("none", (args) => {
+        requireArity("none", args, 0);
+        return record({ kind: "none" });
+      }));
+      environment.define("ok", callable("ok", (args) => {
+        requireArity("ok", args, 1);
+        return record({ ok: true, value: args[0] });
+      }));
+      environment.define("err", callable("err", (args) => {
+        requireArity("err", args, 1);
+        return record({ ok: false, error: args[0] });
+      }));
+      environment.define("is_ok", callable("is_ok", (args) => {
+        requireArity("is_ok", args, 1);
+        const value = args[0];
+        return isRecord2(value) && value.ok === true;
+      }));
+      environment.define("unwrap", callable("unwrap", (args) => {
+        requireArity("unwrap", args, 1);
+        const value = args[0];
+        if (!isRecord2(value) || value.ok !== true) {
+          throw new RuntimeExecutionError("RUNTIME_INVALID_VALUE", `Result unwrap \u5931\u8D25: ${String(isRecord2(value) ? value.error : value)}`);
+        }
+        return value.value;
+      }));
+      environment.define("time", 0);
+      environment.define("delta", 0);
+      environment.define("value", void 0);
+    }
+    predeclareFunctions(statements, environment, state) {
+      for (const statement of statements) {
+        if (statement.kind !== "FuncDef" || environment.hasLocal(statement.name)) continue;
+        environment.define(statement.name, this.makeFunction(statement, environment, state));
+      }
+    }
+    makeFunction(definition, closure, _definitionState) {
+      return callable(definition.name, (args, state, host) => {
+        if (definition.async) {
+          throw new RuntimeExecutionError("RUNTIME_UNSUPPORTED_OPERATION", `\u8FD0\u884C\u65F6\u6682\u4E0D\u652F\u6301 async func\u300C${definition.name}\u300D\u7684\u5F02\u6B65\u6267\u884C`, definition.line);
+        }
+        if (state.callDepth >= state.limits.maxCallDepth) {
+          throw new RuntimeExecutionError("RUNTIME_CALL_DEPTH_LIMIT", `\u51FD\u6570\u8C03\u7528\u6DF1\u5EA6\u8D85\u8FC7 ${state.limits.maxCallDepth}`, definition.line);
+        }
+        state.callDepth += 1;
+        try {
+          const functionEnvironment = new Environment(closure);
+          for (let i = 0; i < definition.params.length; i += 1) {
+            functionEnvironment.define(definition.params[i], args[i]);
+          }
+          this.predeclareFunctions(definition.body.body, functionEnvironment, state);
+          try {
+            this.executeStatements(definition.body.body, functionEnvironment, state, host);
+          } catch (error) {
+            if (error instanceof ReturnSignal) return error.value;
+            throw error;
+          }
+          return void 0;
+        } finally {
+          state.callDepth -= 1;
+        }
+      });
+    }
+    executeStatements(statements, environment, state, host) {
+      for (const statement of statements) {
+        this.step(state, statement.line);
+        this.executeStatement(statement, environment, state, host);
+      }
+    }
+    executeStatement(statement, environment, state, host) {
+      switch (statement.kind) {
+        case "SharedDecl":
+        case "TypeDecl":
+        case "FuncDef":
+          return;
+        case "EnumDecl": {
+          const values = /* @__PURE__ */ Object.create(null);
+          for (const value of statement.values) values[value] = value;
+          environment.define(statement.name, Object.freeze(values));
+          return;
+        }
+        case "ImportDecl":
+          throw new RuntimeExecutionError("RUNTIME_UNSUPPORTED_OPERATION", "\u8FD0\u884C\u65F6\u4E0D\u80FD\u6267\u884C import", statement.line);
+        case "VarDecl":
+          environment.define(statement.name, this.evaluate(statement.value, environment, state, host, statement.line));
+          return;
+        case "Assign":
+          this.assign(statement.target, this.evaluate(statement.value, environment, state, host, statement.line), environment, state, host, statement.line);
+          return;
+        case "If":
+          if (this.isTruthy(this.evaluate(statement.condition, environment, state, host, statement.line))) {
+            this.executeBlock(statement.thenBlock, environment, state, host);
+          } else if (statement.elseBlock) {
+            this.executeBlock(statement.elseBlock, environment, state, host);
+          }
+          return;
+        case "Repeat": {
+          const count = requireNumber(this.evaluate(statement.count, environment, state, host, statement.line), "repeat count");
+          const iterations = Math.max(0, Math.trunc(count));
+          for (let index = 0; index < iterations; index += 1) {
+            this.loopStep(state, statement.line);
+            this.executeBlock(statement.body, environment, state, host);
+          }
+          return;
+        }
+        case "Return":
+          throw new ReturnSignal(statement.value ? this.evaluate(statement.value, environment, state, host, statement.line) : void 0);
+        case "When": {
+          const target = this.requireNode(this.evaluate(statement.target, environment, state, host, statement.line), statement.line);
+          try {
+            host.registerEvent(target, statement.event, (value) => {
+              const callbackState = this.newState();
+              const callbackEnvironment = new Environment(environment);
+              callbackEnvironment.define("value", value);
+              try {
+                this.executeBlock(statement.body, callbackEnvironment, callbackState, host);
+              } catch (error) {
+                throw this.normalizeRuntimeError(error);
+              }
+            });
+          } catch (error) {
+            throw asRuntimeHostFailure(error, "\u6CE8\u518C\u4E8B\u4EF6", statement.line);
+          }
+          return;
+        }
+        case "BindStmt": {
+          const target = this.requireNode(this.evaluate(statement.target.object, environment, state, host, statement.line), statement.line);
+          const getter = () => this.evaluateCallback(statement.source, environment, host, "bind");
+          try {
+            host.registerBinding(getter, target, statement.target.member);
+          } catch (error) {
+            throw asRuntimeHostFailure(error, "\u6CE8\u518C\u7ED1\u5B9A", statement.line);
+          }
+          return;
+        }
+        case "WatchStmt": {
+          const getter = () => this.evaluateCallback(statement.source, environment, host, "watch");
+          const handler = (value) => {
+            const callbackState = this.newState();
+            const callbackEnvironment = new Environment(environment);
+            callbackEnvironment.define("value", value);
+            try {
+              this.executeBlock(statement.body, callbackEnvironment, callbackState, host);
+            } catch (error) {
+              throw this.normalizeRuntimeError(error);
+            }
+          };
+          try {
+            host.registerWatch(getter, handler);
+          } catch (error) {
+            throw asRuntimeHostFailure(error, "\u6CE8\u518C\u76D1\u542C", statement.line);
+          }
+          return;
+        }
+        case "EveryFrame": {
+          const handler = (time, delta) => {
+            const callbackState = this.newState();
+            const callbackEnvironment = new Environment(environment);
+            callbackEnvironment.define("time", time);
+            callbackEnvironment.define("delta", delta);
+            try {
+              this.executeBlock(statement.body, callbackEnvironment, callbackState, host);
+            } catch (error) {
+              throw this.normalizeRuntimeError(error);
+            }
+          };
+          try {
+            host.registerFrame(handler);
+          } catch (error) {
+            throw asRuntimeHostFailure(error, "\u6CE8\u518C\u5E27\u5904\u7406\u5668", statement.line);
+          }
+          return;
+        }
+        case "Animate": {
+          const value = this.evaluate(statement.value, environment, state, host, statement.line);
+          const duration = requireNumber(this.evaluate(statement.duration, environment, state, host, statement.line), "animate duration");
+          try {
+            if (statement.target.kind === "MemberAccess") {
+              const node = this.requireNode(this.evaluate(statement.target.object, environment, state, host, statement.line), statement.line);
+              host.animate(node, statement.target.member, value, duration);
+            } else {
+              const node = this.requireNode(this.evaluate(statement.target, environment, state, host, statement.line), statement.line);
+              const target = this.requireNode(value, statement.line);
+              host.animateTo(node, target, duration);
+            }
+          } catch (error) {
+            throw asRuntimeHostFailure(error, "\u6CE8\u518C\u52A8\u753B", statement.line);
+          }
+          return;
+        }
+        case "ForIn": {
+          const iterable = this.evaluate(statement.iterable, environment, state, host, statement.line);
+          const values = iterableValues(iterable, statement.line);
+          for (const value of values) {
+            this.loopStep(state, statement.line);
+            const iterationEnvironment = new Environment(environment);
+            iterationEnvironment.define(statement.item, value);
+            this.executeBlock(statement.body, iterationEnvironment, state, host);
+          }
+          return;
+        }
+        case "ExpressionStmt":
+          this.evaluate(statement.expression, environment, state, host, statement.line);
+          return;
+      }
+    }
+    executeBlock(block, parent, state, host) {
+      const environment = new Environment(parent);
+      this.predeclareFunctions(block.body, environment, state);
+      this.executeStatements(block.body, environment, state, host);
+    }
+    assign(target, value, environment, state, host, line) {
+      if (target.kind === "Identifier") {
+        if (isUnsafeRuntimeName(target.name)) throw new RuntimeExecutionError("RUNTIME_UNSUPPORTED_OPERATION", `\u540D\u79F0\u300C${target.name}\u300D\u88AB\u8FD0\u884C\u65F6\u5B89\u5168\u7B56\u7565\u62D2\u7EDD`, line);
+        environment.assign(target.name, value);
+        return;
+      }
+      if (target.kind === "MemberAccess") {
+        const object = this.evaluate(target.object, environment, state, host, line);
+        this.writeMember(object, target.member, value, host, line);
+        return;
+      }
+      if (target.kind === "IndexAccess") {
+        const object = this.evaluate(target.object, environment, state, host, line);
+        const index = this.evaluate(target.index, environment, state, host, line);
+        this.writeMember(object, propertyKey(index, line), value, host, line);
+        return;
+      }
+      throw new RuntimeExecutionError("RUNTIME_UNSUPPORTED_OPERATION", "\u8BE5\u8868\u8FBE\u5F0F\u4E0D\u80FD\u4F5C\u4E3A\u8D4B\u503C\u76EE\u6807", line);
+    }
+    evaluateCallback(expression, environment, host, operation) {
+      const state = this.newState();
+      try {
+        return this.evaluate(expression, environment, state, host, void 0);
+      } catch (error) {
+        throw this.normalizeRuntimeError(error, `${operation} getter \u6267\u884C\u5931\u8D25`);
+      }
+    }
+    evaluate(expression, environment, state, host, line) {
+      this.step(state, line);
+      switch (expression.kind) {
+        case "Literal":
+          return expression.value;
+        case "Identifier":
+          return this.resolveIdentifier(expression.name, environment, host, line);
+        case "ArrayLiteral":
+          return expression.elements.map((element) => this.evaluate(element, environment, state, host, line));
+        case "MapLiteral": {
+          const value = /* @__PURE__ */ Object.create(null);
+          for (const entry of expression.entries) {
+            assertSafeProperty(entry.key, line);
+            value[entry.key] = this.evaluate(entry.value, environment, state, host, line);
+          }
+          return value;
+        }
+        case "MemberAccess": {
+          const object = this.evaluate(expression.object, environment, state, host, line);
+          return this.readMember(object, expression.member, host, line);
+        }
+        case "IndexAccess": {
+          const object = this.evaluate(expression.object, environment, state, host, line);
+          const index = this.evaluate(expression.index, environment, state, host, line);
+          return this.readMember(object, propertyKey(index, line), host, line);
+        }
+        case "AwaitExpr":
+          throw new RuntimeExecutionError("RUNTIME_UNSUPPORTED_OPERATION", "bounded runtime \u4E0D\u6267\u884C\u5F02\u6B65 await", line);
+        case "UnaryOp": {
+          const operand = requireNumber(this.evaluate(expression.operand, environment, state, host, line), "\u4E00\u5143\u8FD0\u7B97\u6570");
+          if (expression.op === "+") return operand;
+          if (expression.op === "-") return -operand;
+          throw new RuntimeExecutionError("RUNTIME_UNSUPPORTED_OPERATION", `\u4E0D\u652F\u6301\u7684\u4E00\u5143\u8FD0\u7B97\u7B26\u300C${expression.op}\u300D`, line);
+        }
+        case "BinaryOp": {
+          const left = this.evaluate(expression.left, environment, state, host, line);
+          const right = this.evaluate(expression.right, environment, state, host, line);
+          return this.binary(expression.op, left, right, line);
+        }
+        case "Call":
+          return this.call(expression, environment, state, host, line);
+      }
+    }
+    resolveIdentifier(name, environment, host, line) {
+      if (isUnsafeRuntimeName(name)) throw new RuntimeExecutionError("RUNTIME_UNSUPPORTED_OPERATION", `\u540D\u79F0\u300C${name}\u300D\u88AB\u8FD0\u884C\u65F6\u5B89\u5168\u7B56\u7565\u62D2\u7EDD`, line);
+      if (environment.has(name)) return environment.lookup(name);
+      try {
+        return host.resolveNode(name);
+      } catch (error) {
+        if (error instanceof RuntimeExecutionError) throw error;
+        throw asRuntimeHostFailure(error, `\u89E3\u6790\u8282\u70B9\u300C${name}\u300D`, line);
+      }
+    }
+    call(expression, environment, state, host, line) {
+      const args = expression.args.map((arg) => this.evaluate(arg, environment, state, host, line));
+      if (expression.callee.kind === "MemberAccess") {
+        const object = this.evaluate(expression.callee.object, environment, state, host, line);
+        if (isNode(object)) return this.invokeNode(object, expression.callee.member, args, host, line);
+        return this.invokeCallable(this.readMember(object, expression.callee.member, host, line), args, state, host, line);
+      }
+      if (expression.callee.kind === "IndexAccess") {
+        const object = this.evaluate(expression.callee.object, environment, state, host, line);
+        const index = this.evaluate(expression.callee.index, environment, state, host, line);
+        if (isNode(object)) return this.invokeNode(object, propertyKey(index, line), args, host, line);
+        return this.invokeCallable(this.readMember(object, propertyKey(index, line), host, line), args, state, host, line);
+      }
+      const callee = this.evaluate(expression.callee, environment, state, host, line);
+      return this.invokeCallable(callee, args, state, host, line);
+    }
+    invokeNode(node, method, args, host, line) {
+      assertSafeProperty(method, line);
+      try {
+        return host.invokeNodeMethod(node, method, args);
+      } catch (error) {
+        throw asRuntimeHostFailure(error, `\u8C03\u7528\u8282\u70B9\u300C${node.name}.${method}\u300D`, line);
+      }
+    }
+    invokeCallable(value, args, state, host, line) {
+      if (!isCallable(value)) throw new RuntimeExecutionError("RUNTIME_INVALID_VALUE", "\u8C03\u7528\u76EE\u6807\u4E0D\u662F\u53D7\u652F\u6301\u7684 runtime function", line);
+      this.step(state, line);
+      try {
+        return value.invoke(args, state, host);
+      } catch (error) {
+        throw this.normalizeRuntimeError(error);
+      }
+    }
+    readMember(value, property, host, line) {
+      assertSafeProperty(property, line);
+      if (isNode(value)) {
+        try {
+          return host.readNodeProperty(value, property);
+        } catch (error) {
+          throw asRuntimeHostFailure(error, `\u8BFB\u53D6\u8282\u70B9\u5C5E\u6027\u300C${value.name}.${property}\u300D`, line);
+        }
+      }
+      if (Array.isArray(value)) {
+        if (property === "length") return value.length;
+        const index = arrayIndex(property);
+        if (index === void 0) throw new RuntimeExecutionError("RUNTIME_UNSUPPORTED_OPERATION", `\u6570\u7EC4\u5C5E\u6027\u300C${property}\u300D\u4E0D\u662F\u6570\u636E\u5C5E\u6027`, line);
+        return value[index];
+      }
+      if (typeof value === "string") {
+        if (property === "length") return value.length;
+        const index = arrayIndex(property);
+        return index === void 0 ? void 0 : value[index];
+      }
+      if (isRecord2(value)) {
+        if (!Object.prototype.hasOwnProperty.call(value, property)) return void 0;
+        const descriptor = Object.getOwnPropertyDescriptor(value, property);
+        if (!descriptor || !Object.prototype.hasOwnProperty.call(descriptor, "value")) {
+          throw new RuntimeExecutionError("RUNTIME_INVALID_VALUE", `\u5C5E\u6027\u300C${property}\u300D\u4E0D\u662F\u53D7\u652F\u6301\u7684\u6570\u636E\u5C5E\u6027`, line);
+        }
+        if (typeof descriptor.value === "function") throw new RuntimeExecutionError("RUNTIME_UNSUPPORTED_OPERATION", `\u7981\u6B62\u8BFB\u53D6\u539F\u751F\u51FD\u6570\u5C5E\u6027\u300C${property}\u300D`, line);
+        return descriptor.value;
+      }
+      throw new RuntimeExecutionError("RUNTIME_INVALID_VALUE", `\u503C\u4E0D\u652F\u6301\u5C5E\u6027\u8BBF\u95EE\u300C${property}\u300D`, line);
+    }
+    writeMember(value, property, next, host, line) {
+      assertSafeProperty(property, line);
+      if (isNode(value)) {
+        try {
+          host.writeNodeProperty(value, property, next);
+        } catch (error) {
+          throw asRuntimeHostFailure(error, `\u5199\u5165\u8282\u70B9\u5C5E\u6027\u300C${value.name}.${property}\u300D`, line);
+        }
+        return;
+      }
+      if (Array.isArray(value)) {
+        const index = arrayIndex(property);
+        if (index === void 0) throw new RuntimeExecutionError("RUNTIME_UNSUPPORTED_OPERATION", `\u4E0D\u80FD\u5199\u5165\u6570\u7EC4\u5C5E\u6027\u300C${property}\u300D`, line);
+        value[index] = next;
+        return;
+      }
+      if (isRecord2(value)) {
+        value[property] = next;
+        return;
+      }
+      throw new RuntimeExecutionError("RUNTIME_INVALID_VALUE", `\u503C\u4E0D\u652F\u6301\u5C5E\u6027\u5199\u5165\u300C${property}\u300D`, line);
+    }
+    binary(operator, left, right, line) {
+      switch (operator) {
+        case "+":
+          if (typeof left === "string" || typeof right === "string") return String(left) + String(right);
+          return requireNumber(left, "\u52A0\u6CD5\u5DE6\u503C", line) + requireNumber(right, "\u52A0\u6CD5\u53F3\u503C", line);
+        case "-":
+          return requireNumber(left, "\u51CF\u6CD5\u5DE6\u503C", line) - requireNumber(right, "\u51CF\u6CD5\u53F3\u503C", line);
+        case "*":
+          return requireNumber(left, "\u4E58\u6CD5\u5DE6\u503C", line) * requireNumber(right, "\u4E58\u6CD5\u53F3\u503C", line);
+        case "/":
+          return requireNumber(left, "\u9664\u6CD5\u5DE6\u503C", line) / requireNumber(right, "\u9664\u6CD5\u53F3\u503C", line);
+        case "==":
+          return left === right;
+        case "!=":
+          return left !== right;
+        case ">":
+          return comparable(left, right, line, (a, b) => a > b);
+        case "<":
+          return comparable(left, right, line, (a, b) => a < b);
+        case ">=":
+          return comparable(left, right, line, (a, b) => a >= b);
+        case "<=":
+          return comparable(left, right, line, (a, b) => a <= b);
+        default:
+          throw new RuntimeExecutionError("RUNTIME_UNSUPPORTED_OPERATION", `\u4E0D\u652F\u6301\u7684\u4E8C\u5143\u8FD0\u7B97\u7B26\u300C${operator}\u300D`, line);
+      }
+    }
+    requireNode(value, line) {
+      if (!isNode(value)) throw new RuntimeExecutionError("RUNTIME_INVALID_VALUE", "\u8BE5\u64CD\u4F5C\u9700\u8981\u4E00\u4E2A\u573A\u666F\u8282\u70B9", line);
+      return value;
+    }
+    isTruthy(value) {
+      return Boolean(value);
+    }
+    step(state, line) {
+      state.steps += 1;
+      if (state.steps > state.limits.maxSteps) {
+        throw new RuntimeExecutionError("RUNTIME_STEP_LIMIT", `\u6267\u884C\u6B65\u6570\u8D85\u8FC7 ${state.limits.maxSteps}`, line);
+      }
+    }
+    loopStep(state, line) {
+      state.loopIterations += 1;
+      if (state.loopIterations > state.limits.maxLoopIterations) {
+        throw new RuntimeExecutionError("RUNTIME_LOOP_LIMIT", `\u5FAA\u73AF\u8FED\u4EE3\u6B21\u6570\u8D85\u8FC7 ${state.limits.maxLoopIterations}`, line);
+      }
+    }
+    normalizeRuntimeError(error, context) {
+      if (error instanceof RuntimeExecutionError) {
+        if (!context) return error;
+        return new RuntimeExecutionError(error.code, `${context}: ${error.message}`, error.line, error);
+      }
+      const message = error instanceof Error ? error.message : String(error);
+      return new RuntimeExecutionError("RUNTIME_HOST_FAILURE", context ? `${context}: ${message}` : message, void 0, error);
+    }
+  };
+  function callable(name, invoke) {
+    return { kind: "RuntimeCallable", name, invoke };
+  }
+  function record(values) {
+    return { ...values };
+  }
+  function normalizeLimits(limits) {
+    const result = {
+      maxSteps: limits.maxSteps ?? DEFAULT_RUNTIME_LIMITS.maxSteps,
+      maxLoopIterations: limits.maxLoopIterations ?? DEFAULT_RUNTIME_LIMITS.maxLoopIterations,
+      maxCallDepth: limits.maxCallDepth ?? DEFAULT_RUNTIME_LIMITS.maxCallDepth
+    };
+    for (const [name, value] of Object.entries(result)) {
+      if (!Number.isSafeInteger(value) || value <= 0) throw new RuntimeExecutionError("RUNTIME_PROGRAM_INVALID", `${name} \u5FC5\u987B\u662F\u6B63\u6574\u6570`);
+    }
+    return Object.freeze(result);
+  }
+  function requireArity(name, args, count) {
+    if (args.length !== count) throw new RuntimeExecutionError("RUNTIME_INVALID_VALUE", `${name} \u9700\u8981 ${count} \u4E2A\u53C2\u6570\uFF0C\u6536\u5230 ${args.length} \u4E2A`);
+  }
+  function requireNumber(value, label, line) {
+    if (typeof value !== "number" || !Number.isFinite(value)) throw new RuntimeExecutionError("RUNTIME_INVALID_VALUE", `${label} \u5FC5\u987B\u662F\u6709\u9650\u6570\u5B57`, line);
+    return value;
+  }
+  function comparable(left, right, line, operation) {
+    if (isNode(left) || isNode(right)) return false;
+    if (typeof left === "number" && typeof right === "number") return operation(left, right);
+    if (typeof left === "string" && typeof right === "string") return operation(left, right);
+    throw new RuntimeExecutionError("RUNTIME_INVALID_VALUE", "\u6BD4\u8F83\u8FD0\u7B97\u9700\u8981\u540C\u7C7B\u578B\u6570\u5B57\u6216\u5B57\u7B26\u4E32", line);
+  }
+  function iterableValues(value, line) {
+    if (Array.isArray(value)) return value;
+    if (typeof value === "string") return Array.from(value);
+    throw new RuntimeExecutionError("RUNTIME_INVALID_VALUE", "for-in \u53EA\u652F\u6301\u6570\u7EC4\u6216\u5B57\u7B26\u4E32", line);
+  }
+  function propertyKey(value, line) {
+    if (typeof value === "string") {
+      assertSafeProperty(value, line);
+      return value;
+    }
+    if (typeof value === "number" && Number.isSafeInteger(value) && value >= 0) return String(value);
+    throw new RuntimeExecutionError("RUNTIME_INVALID_VALUE", "\u5C5E\u6027\u7D22\u5F15\u5FC5\u987B\u662F\u5B89\u5168\u7684\u5B57\u7B26\u4E32\u6216\u975E\u8D1F\u6574\u6570", line);
+  }
+  function arrayIndex(property) {
+    if (!/^(?:0|[1-9][0-9]*)$/.test(property)) return void 0;
+    const value = Number(property);
+    return Number.isSafeInteger(value) && value >= 0 ? value : void 0;
+  }
+  function assertSafeProperty(property, line) {
+    if (isUnsafeRuntimeName(property)) throw new RuntimeExecutionError("RUNTIME_UNSUPPORTED_OPERATION", `\u5C5E\u6027\u300C${property}\u300D\u88AB\u8FD0\u884C\u65F6\u5B89\u5168\u7B56\u7565\u62D2\u7EDD`, line);
+  }
+  function isRecord2(value) {
+    return value !== null && typeof value === "object" && !Array.isArray(value) && !isNode(value) && !isCallable(value);
+  }
+  function isNode(value) {
+    return value !== null && typeof value === "object" && value.kind === "RuntimeNode";
+  }
+  function isCallable(value) {
+    return value !== null && typeof value === "object" && value.kind === "RuntimeCallable";
+  }
+
   // src/runtime/runtime.ts
-  function vec3(x, y, z) {
-    return { x, y, z };
-  }
-  function color(r, g, b) {
-    return { r, g, b };
-  }
   function some(value) {
     return { kind: "some", value };
   }
@@ -1589,65 +2028,114 @@ ${canonicalJson(unsigned)}`))
     if (!value.ok) throw new Error(`Result unwrap \u5931\u8D25: ${String(value.error)}`);
     return value.value;
   }
-  var COMPILED_EXECUTOR_CACHE = /* @__PURE__ */ new Map();
-  var MAX_COMPILED_EXECUTORS = 128;
   var BadodoRuntime = class {
     nodes = /* @__PURE__ */ new Map();
+    nodeRefs = /* @__PURE__ */ new Map();
+    nodeValues = /* @__PURE__ */ new WeakMap();
     bindings = [];
     watchers = [];
     frameHandlers = [];
     events = /* @__PURE__ */ new Map();
     tweens = [];
     time = 0;
+    executor;
+    constructor(limits = {}) {
+      this.executor = new RuntimeExecutor(limits);
+    }
     registerNode(name, node) {
+      assertSafeName(name);
       this.nodes.set(name, node);
+      this.nodeRefs.delete(name);
     }
     registerNodes(map) {
-      for (const [name, node] of Object.entries(map)) {
-        this.nodes.set(name, node);
-      }
+      for (const [name, node] of Object.entries(map)) this.registerNode(name, node);
     }
     resolveNode(name) {
+      assertSafeName(name);
       const node = this.nodes.get(name);
       if (node === void 0) {
-        throw new Error(`\u8282\u70B9\u300C${name}\u300D\u672A\u627E\u5230\u3002\u8BF7\u5148\u7528 registerNode("${name}", ...) \u6CE8\u518C\u5B83\u3002`);
+        throw new RuntimeExecutionError("RUNTIME_INVALID_VALUE", `\u8282\u70B9\u300C${name}\u300D\u672A\u627E\u5230\u3002\u8BF7\u5148\u7528 registerNode("${name}", ...) \u6CE8\u518C\u5B83\u3002`);
       }
-      return node;
+      const existing = this.nodeRefs.get(name);
+      if (existing) return existing;
+      const ref = Object.freeze({ kind: "RuntimeNode", name });
+      this.nodeRefs.set(name, ref);
+      this.nodeValues.set(ref, node);
+      return ref;
     }
-    bind = (getter, node, prop) => {
-      this.bindings.push({ getter, node, prop, prev: void 0, initialized: false });
-    };
-    watch = (getter, handler) => {
-      this.watchers.push({ getter, handler, prev: void 0, initialized: false });
-    };
-    onFrame = (handler) => {
-      this.frameHandlers.push(handler);
-    };
-    /** Animate node[prop] from its current value to `value` over `duration` seconds. */
-    animate = (node, prop, value, duration) => {
-      const from = node[prop];
-      const isVector = isVectorLike(from);
-      const to = isVector ? normalizeVector(value) : value;
-      this.tweens.push({ node, prop, from: isVector ? normalizeVector(from) : from, to, duration, elapsed: 0, isVector });
-    };
-    /** Animate a node's position to another node's position over `duration` seconds. */
-    animateTo = (node, target, duration) => {
-      const from = node.position ?? node;
-      const to = target.position ?? target;
-      this.tweens.push({ node, prop: "position", from: normalizeVector(from), to: normalizeVector(to), duration, elapsed: 0, isVector: true });
-    };
-    on = (node, event, handler) => {
-      if (node == null) {
-        throw new Error(`\u65E0\u6CD5\u7ED9\u7A7A\u8282\u70B9\u6CE8\u518C\u4E8B\u4EF6\u300C${event}\u300D`);
+    readNodeProperty(node, property) {
+      assertSafeProperty2(property);
+      const target = this.rawNode(node);
+      if (target === null || typeof target !== "object" && typeof target !== "function") {
+        throw new RuntimeExecutionError("RUNTIME_INVALID_VALUE", `\u8282\u70B9\u300C${node.name}\u300D\u4E0D\u652F\u6301\u5C5E\u6027\u8BFB\u53D6`);
       }
-      if (typeof node.addEventListener === "function") {
-        node.addEventListener(event, handler);
+      const descriptor = Object.getOwnPropertyDescriptor(target, property);
+      if (!descriptor) return void 0;
+      const value = "value" in descriptor ? descriptor.value : Reflect.get(target, property);
+      if (typeof value === "function") {
+        throw new RuntimeExecutionError("RUNTIME_UNSUPPORTED_OPERATION", `\u7981\u6B62\u5C06\u8282\u70B9\u65B9\u6CD5\u300C${node.name}.${property}\u300D\u4F5C\u4E3A\u6570\u636E\u8BFB\u53D6`);
+      }
+      return value;
+    }
+    writeNodeProperty(node, property, value) {
+      assertSafeProperty2(property);
+      const target = this.rawNode(node);
+      if (target === null || typeof target !== "object" && typeof target !== "function") {
+        throw new RuntimeExecutionError("RUNTIME_INVALID_VALUE", `\u8282\u70B9\u300C${node.name}\u300D\u4E0D\u652F\u6301\u5C5E\u6027\u5199\u5165`);
+      }
+      const next = this.toHostValue(value);
+      const descriptor = Object.getOwnPropertyDescriptor(target, property);
+      if (descriptor && !descriptor.writable && !descriptor.set) {
+        throw new RuntimeExecutionError("RUNTIME_HOST_FAILURE", `\u8282\u70B9\u300C${node.name}.${property}\u300D\u5199\u5165\u88AB\u62D2\u7EDD`);
+      }
+      if (descriptor?.set) {
+        descriptor.set.call(target, next);
         return;
       }
-      let eventMap = this.events.get(node);
+      Object.defineProperty(target, property, {
+        configurable: descriptor?.configurable ?? true,
+        enumerable: descriptor?.enumerable ?? true,
+        writable: true,
+        value: next
+      });
+    }
+    invokeNodeMethod(node, method, args) {
+      assertSafeProperty2(method);
+      const target = this.rawNode(node);
+      if (target === null || typeof target !== "object" && typeof target !== "function") {
+        throw new RuntimeExecutionError("RUNTIME_INVALID_VALUE", `\u8282\u70B9\u300C${node.name}\u300D\u4E0D\u652F\u6301\u65B9\u6CD5\u8C03\u7528`);
+      }
+      const callable2 = Reflect.get(target, method);
+      if (!Object.prototype.hasOwnProperty.call(target, method) || typeof callable2 !== "function") {
+        throw new RuntimeExecutionError("RUNTIME_INVALID_VALUE", `\u8282\u70B9\u300C${node.name}.${method}\u300D\u4E0D\u662F\u53EF\u8C03\u7528\u65B9\u6CD5`);
+      }
+      return callable2.apply(target, args.map((arg) => this.toHostValue(arg)));
+    }
+    registerBinding(getter, node, property) {
+      assertSafeProperty2(property);
+      this.bindings.push({ getter, node, prop: property, prev: void 0, initialized: false });
+    }
+    registerWatch(getter, handler) {
+      this.watchers.push({ getter, handler, prev: void 0, initialized: false });
+    }
+    registerFrame(handler) {
+      this.frameHandlers.push(handler);
+    }
+    registerEvent(node, event, handler) {
+      assertSafeProperty2(event);
+      const target = this.rawNode(node);
+      if (target === null || typeof target !== "object" && typeof target !== "function") {
+        throw new RuntimeExecutionError("RUNTIME_INVALID_VALUE", `\u8282\u70B9\u300C${node.name}\u300D\u4E0D\u652F\u6301\u4E8B\u4EF6`);
+      }
+      const nativeAddEventListener = Reflect.get(target, "addEventListener");
+      if (typeof nativeAddEventListener === "function") {
+        nativeAddEventListener.call(target, event, handler);
+        return;
+      }
+      let eventMap = this.events.get(target);
       if (!eventMap) {
         eventMap = /* @__PURE__ */ new Map();
-        this.events.set(node, eventMap);
+        this.events.set(target, eventMap);
       }
       let handlers = eventMap.get(event);
       if (!handlers) {
@@ -1655,87 +2143,107 @@ ${canonicalJson(unsigned)}`))
         eventMap.set(event, handlers);
       }
       handlers.push(handler);
+    }
+    animate(node, property, value, duration) {
+      assertSafeProperty2(property);
+      const from = this.readNodeProperty(node, property);
+      const isVector = isVectorLike(from);
+      this.tweens.push({
+        node,
+        prop: property,
+        from: isVector ? normalizeVector(from) : from,
+        to: isVector ? normalizeVector(value) : value,
+        duration: Math.max(0, duration),
+        elapsed: 0,
+        isVector
+      });
+    }
+    animateTo(node, target, duration) {
+      const from = this.readNodeProperty(node, "position") ?? this.rawNode(node);
+      const to = this.readNodeProperty(target, "position") ?? this.rawNode(target);
+      this.tweens.push({
+        node,
+        prop: "position",
+        from: normalizeVector(from),
+        to: normalizeVector(to),
+        duration: Math.max(0, duration),
+        elapsed: 0,
+        isVector: true
+      });
+    }
+    /** Compatibility helper for hosts that still call the legacy callback name. */
+    bind = (getter, node, prop) => {
+      this.registerBinding(getter, this.asNodeHandle(node), prop);
     };
-    /** Dispatch an event to all handlers registered via `on`. */
+    watch = (getter, handler) => {
+      this.registerWatch(getter, handler);
+    };
+    onFrame = (handler) => {
+      this.registerFrame((time) => handler(time));
+    };
+    on = (node, event, handler) => {
+      this.registerEvent(this.asNodeHandle(node), event, handler);
+    };
+    /** Dispatch an event to handlers registered through the explicit host boundary. */
     emit(node, event, value) {
-      const eventMap = this.events.get(node);
-      if (!eventMap) return;
-      const handlers = eventMap.get(event);
+      assertSafeProperty2(event);
+      const target = isNodeHandle(node) ? this.rawNode(node) : node;
+      const handlers = this.events.get(target)?.get(event);
       if (!handlers) return;
-      for (let i = 0; i < handlers.length; i += 1) handlers[i](value);
+      for (const handler of [...handlers]) handler(value);
     }
-    /** Run a Badodo Script source string against the registered nodes. */
-    run(source) {
-      const { ast, typescript } = compileWithAst(source);
-      if (ast.body.some((stmt) => stmt.kind === "ImportDecl")) {
-        throw new Error("\u5305\u542B import \u7684 BDS \u5FC5\u987B\u5148\u4EA4\u7ED9 Node/\u6D4F\u89C8\u5668 bundler \u89E3\u6790\uFF0C\u518D\u8C03\u7528 runCompiled \u6267\u884C");
+    /** Parse canonical source and execute its structured runtime representation. */
+    run(source, sourceName = "source.bds") {
+      this.runProgram(compileRuntime(source, sourceName));
+    }
+    runProgram(program) {
+      this.executor.execute(program, this);
+    }
+    runCompiled(programOrCode) {
+      if (typeof programOrCode === "string") {
+        throw new RuntimeExecutionError("RUNTIME_UNSUPPORTED_OPERATION", "runCompiled \u4E0D\u518D\u6267\u884C\u751F\u6210 JavaScript\uFF1B\u8BF7\u4F7F\u7528 run() \u6216 runProgram() \u4F20\u5165 RuntimeProgram");
       }
-      const nodeNames = collectNodes(ast);
-      this.runCompiled(typescript, nodeNames);
+      this.runProgram(programOrCode);
     }
-    /** Execute already-compiled JavaScript with the given node names injected. */
-    runCompiled(code, nodeNames) {
-      assertBdsPayload({ version: BDS_PAYLOAD_VERSION, nodeNames, code });
-      const args = [
-        ...nodeNames.map((n) => this.resolveNode(n)),
-        this.bind,
-        this.watch,
-        this.onFrame,
-        this.on,
-        this.animate,
-        this.animateTo,
-        vec3,
-        color,
-        some,
-        none,
-        ok,
-        err,
-        is_ok,
-        unwrap
-      ];
-      const cacheKey = `${nodeNames.join("\0")}\0${code}`;
-      let fn = COMPILED_EXECUTOR_CACHE.get(cacheKey);
-      if (!fn) {
-        fn = new Function(...nodeNames, "bind", "watch", "onFrame", "on", "animate", "animateTo", "vec3", "color", "some", "none", "ok", "err", "is_ok", "unwrap", code);
-        if (COMPILED_EXECUTOR_CACHE.size >= MAX_COMPILED_EXECUTORS) {
-          const oldest = COMPILED_EXECUTOR_CACHE.keys().next().value;
-          if (oldest !== void 0) COMPILED_EXECUTOR_CACHE.delete(oldest);
-        }
-        COMPILED_EXECUTOR_CACHE.set(cacheKey, fn);
-      }
-      fn(...args);
-    }
-    /** Advance one frame. Call this from Babylon's render loop or requestAnimationFrame. */
+    /** Advance one frame from a Babylon render loop or requestAnimationFrame. */
     tick(deltaTime) {
-      this.time += deltaTime;
-      for (const handler of this.frameHandlers) {
-        handler(this.time);
+      try {
+        this.tickInternal(deltaTime);
+      } catch (error) {
+        if (error instanceof RuntimeExecutionError) throw error;
+        throw new RuntimeExecutionError("RUNTIME_HOST_FAILURE", `\u5E27\u8FD0\u884C\u5931\u8D25: ${error instanceof Error ? error.message : String(error)}`, void 0, error);
       }
-      for (const w of this.watchers) {
-        const value = w.getter();
-        if (!w.initialized || !Object.is(value, w.prev)) {
-          w.initialized = true;
-          w.prev = value;
-          w.handler(value);
+    }
+    tickInternal(deltaTime) {
+      if (!Number.isFinite(deltaTime) || deltaTime < 0) throw new RuntimeExecutionError("RUNTIME_INVALID_VALUE", "deltaTime \u5FC5\u987B\u662F\u975E\u8D1F\u6709\u9650\u6570\u5B57");
+      this.time += deltaTime;
+      for (const handler of [...this.frameHandlers]) handler(this.time, deltaTime);
+      for (const watcher of [...this.watchers]) {
+        const value = watcher.getter();
+        if (!watcher.initialized || !Object.is(value, watcher.prev)) {
+          watcher.handler(value);
+          watcher.initialized = true;
+          watcher.prev = value;
         }
       }
-      for (const b of this.bindings) {
-        const value = b.getter();
-        if (!b.initialized || !Object.is(value, b.prev)) {
-          b.initialized = true;
-          b.prev = value;
-          b.node[b.prop] = value;
+      for (const binding of [...this.bindings]) {
+        const value = binding.getter();
+        if (!binding.initialized || !Object.is(value, binding.prev)) {
+          this.writeNodeProperty(binding.node, binding.prop, value);
+          binding.initialized = true;
+          binding.prev = value;
         }
       }
       let activeTweens = 0;
-      for (let i = 0; i < this.tweens.length; i += 1) {
-        const tween = this.tweens[i];
+      for (const tween of this.tweens) {
         tween.elapsed += deltaTime;
-        const t = Math.min(tween.elapsed / tween.duration, 1);
+        const t = tween.duration === 0 ? 1 : Math.min(tween.elapsed / tween.duration, 1);
         if (tween.isVector) {
-          writeVectorLerp(tween.node, tween.prop, tween.from, tween.to, t);
+          writeVectorLerp(this, tween.node, tween.prop, normalizeVector(tween.from), normalizeVector(tween.to), t);
         } else {
-          tween.node[tween.prop] = tween.from + (tween.to - tween.from) * t;
+          const from = requireFiniteNumber(tween.from, "\u52A8\u753B\u8D77\u59CB\u503C");
+          const to = requireFiniteNumber(tween.to, "\u52A8\u753B\u76EE\u6807\u503C");
+          this.writeNodeProperty(tween.node, tween.prop, from + (to - from) * t);
         }
         if (t < 1) {
           this.tweens[activeTweens] = tween;
@@ -1755,40 +2263,78 @@ ${canonicalJson(unsigned)}`))
       };
       requestAnimationFrame(loop);
     }
+    rawNode(node) {
+      if (!isNodeHandle(node)) throw new RuntimeExecutionError("RUNTIME_INVALID_VALUE", "\u65E0\u6548\u7684 runtime \u8282\u70B9\u53E5\u67C4");
+      const value = this.nodeValues.get(node);
+      if (value === void 0) throw new RuntimeExecutionError("RUNTIME_INVALID_VALUE", `\u8282\u70B9\u300C${node.name}\u300D\u53E5\u67C4\u5DF2\u5931\u6548`);
+      return value;
+    }
+    asNodeHandle(node) {
+      if (isNodeHandle(node)) return node;
+      for (const ref2 of this.nodeRefs.values()) if (this.nodeValues.get(ref2) === node) return ref2;
+      const ref = Object.freeze({ kind: "RuntimeNode", name: "<legacy>" });
+      this.nodeValues.set(ref, node);
+      return ref;
+    }
+    toHostValue(value) {
+      if (isNodeHandle(value)) return this.rawNode(value);
+      if (Array.isArray(value)) return value.map((item) => this.toHostValue(item));
+      if (value !== null && typeof value === "object" && !isCallableLike(value)) {
+        const result = {};
+        for (const [key, item] of Object.entries(value)) result[key] = this.toHostValue(item);
+        return result;
+      }
+      return value;
+    }
   };
-  function compileWithAst(source) {
-    const tokens = tokenize(source);
-    const ast = parse(tokens);
-    const typescript = generateTypeScript(ast);
-    return { ast, typescript };
+  function assertSafeName(name) {
+    if (typeof name !== "string" || name.length === 0 || isUnsafeRuntimeName(name)) {
+      throw new RuntimeExecutionError("RUNTIME_UNSUPPORTED_OPERATION", `\u540D\u79F0\u300C${name}\u300D\u88AB\u8FD0\u884C\u65F6\u5B89\u5168\u7B56\u7565\u62D2\u7EDD`);
+    }
+  }
+  function assertSafeProperty2(property) {
+    if (typeof property !== "string" || property.length === 0 || isUnsafeRuntimeName(property)) {
+      throw new RuntimeExecutionError("RUNTIME_UNSUPPORTED_OPERATION", `\u5C5E\u6027\u300C${property}\u300D\u88AB\u8FD0\u884C\u65F6\u5B89\u5168\u7B56\u7565\u62D2\u7EDD`);
+    }
+  }
+  function isNodeHandle(value) {
+    return value !== null && typeof value === "object" && value.kind === "RuntimeNode";
+  }
+  function isCallableLike(value) {
+    return value !== null && typeof value === "object" && value.kind === "RuntimeCallable";
   }
   function isVectorLike(value) {
-    return value != null && typeof value === "object" && typeof value.x === "number" && typeof value.y === "number";
+    return value !== null && typeof value === "object" && !Array.isArray(value) && typeof value.x === "number" && typeof value.y === "number";
   }
   function normalizeVector(value) {
-    return {
-      x: value?.x ?? 0,
-      y: value?.y ?? 0,
-      z: value?.z ?? 0
-    };
+    if (value !== null && typeof value === "object" && !Array.isArray(value)) {
+      const object = value;
+      return {
+        x: typeof object.x === "number" ? object.x : 0,
+        y: typeof object.y === "number" ? object.y : 0,
+        z: typeof object.z === "number" ? object.z : 0
+      };
+    }
+    return { x: 0, y: 0, z: 0 };
   }
-  function writeVectorLerp(node, prop, from, to, t) {
-    const x = from.x + (to.x - from.x) * t;
-    const y = from.y + (to.y - from.y) * t;
-    const z = from.z + (to.z - from.z) * t;
-    if (prop === "position" && node.position && typeof node.position === "object") {
-      node.position.x = x;
-      node.position.y = y;
-      node.position.z = z;
+  function writeVectorLerp(runtime, node, property, from, to, t) {
+    const current = runtime.readNodeProperty(node, property);
+    if (current !== null && typeof current === "object" && !Array.isArray(current)) {
+      const target = current;
+      target.x = from.x + (to.x - from.x) * t;
+      target.y = from.y + (to.y - from.y) * t;
+      target.z = from.z + (to.z - from.z) * t;
       return;
     }
-    if (node[prop] && typeof node[prop] === "object") {
-      node[prop].x = x;
-      node[prop].y = y;
-      node[prop].z = z;
-      return;
-    }
-    node[prop] = { x, y, z };
+    runtime.writeNodeProperty(node, property, {
+      x: from.x + (to.x - from.x) * t,
+      y: from.y + (to.y - from.y) * t,
+      z: from.z + (to.z - from.z) * t
+    });
+  }
+  function requireFiniteNumber(value, label) {
+    if (typeof value !== "number" || !Number.isFinite(value)) throw new RuntimeExecutionError("RUNTIME_INVALID_VALUE", `${label} \u5FC5\u987B\u662F\u6709\u9650\u6570\u5B57`);
+    return value;
   }
 
   // src/adapters/babylon.ts
@@ -2003,11 +2549,13 @@ ${canonicalJson(unsigned)}`))
   }
   async function runSignedEncrypted(runtime, url, passphrase, publicKeyPem, now = /* @__PURE__ */ new Date(), requiredFeature) {
     const payload = await loadSignedEncrypted(url, passphrase, publicKeyPem, now, requiredFeature);
-    runtime.runCompiled(payload.code, payload.nodeNames);
+    if (!payload.runtimeProgram) throw new Error("\u52A0\u5BC6 payload \u7F3A\u5C11 bounded RuntimeProgram\uFF1B\u8BF7\u91CD\u65B0\u6253\u5305 BDS \u6587\u4EF6");
+    runtime.runProgram(payload.runtimeProgram);
   }
   async function runEncrypted(runtime, url, passphrase) {
     const payload = await loadEncrypted(url, passphrase);
-    runtime.runCompiled(payload.code, payload.nodeNames);
+    if (!payload.runtimeProgram) throw new Error("\u52A0\u5BC6 payload \u7F3A\u5C11 bounded RuntimeProgram\uFF1B\u8BF7\u91CD\u65B0\u6253\u5305 BDS \u6587\u4EF6");
+    runtime.runProgram(payload.runtimeProgram);
   }
   return __toCommonJS(browser_exports);
 })();

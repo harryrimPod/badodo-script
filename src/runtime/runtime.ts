@@ -1,9 +1,6 @@
-import { tokenize } from "../lexer";
-import { parse } from "../parser";
-import { generateTypeScript } from "../generator";
-import { Program } from "../ast";
-import { collectNodes } from "./collect-nodes";
-import { assertBdsPayload, BDS_PAYLOAD_VERSION } from "../payload";
+import { RuntimeLimits, RuntimeExecutor, RuntimeHost, RuntimeNodeHandle, RuntimeValue } from "./executor";
+import { RuntimeExecutionError } from "./errors";
+import { compileRuntime, isUnsafeRuntimeName, RuntimeProgram } from "./program";
 
 export type NodeMap = Record<string, any>;
 
@@ -44,6 +41,7 @@ export function unwrap<T>(value: { ok: true; value: T } | { ok: false; error: un
   return value.value;
 }
 
+/** Legacy callback shape retained for host integrations; the executor uses RuntimeHost. */
 export interface RuntimeHandles {
   bind: (getter: () => any, node: any, prop: string) => void;
   watch: (getter: () => any, handler: (value: any) => void) => void;
@@ -51,143 +49,157 @@ export interface RuntimeHandles {
   on: (node: any, event: string, handler: (value?: any) => void) => void;
 }
 
-type CompiledExecutor = (...args: any[]) => void;
-const COMPILED_EXECUTOR_CACHE = new Map<string, CompiledExecutor>();
-const MAX_COMPILED_EXECUTORS = 128;
-
-/** Clear cached executors when a host unloads a scene or plugin. */
-export function clearRuntimeCompilationCache(): void {
-  COMPILED_EXECUTOR_CACHE.clear();
-}
-
-export function runtimeCompilationCacheSize(): number {
-  return COMPILED_EXECUTOR_CACHE.size;
-}
-
 interface BindingEntry {
-  getter: () => any;
-  node: any;
+  getter: () => RuntimeValue;
+  node: RuntimeNodeHandle;
   prop: string;
-  prev: any;
+  prev: RuntimeValue;
   initialized: boolean;
 }
 
 interface WatchEntry {
-  getter: () => any;
-  handler: (value: any) => void;
-  prev: any;
+  getter: () => RuntimeValue;
+  handler: (value: RuntimeValue) => void;
+  prev: RuntimeValue;
   initialized: boolean;
 }
 
 interface TweenEntry {
-  node: any;
+  node: RuntimeNodeHandle;
   prop: string;
-  from: any;
-  to: any;
+  from: RuntimeValue;
+  to: RuntimeValue;
   duration: number;
   elapsed: number;
   isVector: boolean;
 }
 
 /**
- * Badodo Script runtime.
+ * Bounded, host-controlled Badodo Script runtime.
  *
- * Responsibilities:
- *  - Resolve scene nodes by name and inject them into script scope.
- *  - Provide the four runtime functions the generated TypeScript depends on:
- *      bind / watch / onFrame (and node.on for events).
- *  - Drive per-frame polling so bind/watch react to value changes.
- *
- * Usage (browser, Babylon.js):
- *   const rt = new BadodoRuntime();
- *   rt.registerNode("door", mesh);
- *   rt.run(source);               // compile + execute
- *   scene.onBeforeRenderObservable.add(() => rt.tick(scene.getEngine().getDeltaTime() / 1000));
+ * Runtime execution consumes canonical RuntimeProgram data. TypeScript output
+ * remains available through compile()/generateTypeScript() for export targets,
+ * but it is never evaluated by this runtime.
  */
-export class BadodoRuntime {
-  private nodes = new Map<string, any>();
-  private resolvedNodeArgs = new Map<string, any[]>();
+export class BadodoRuntime implements RuntimeHost {
+  private nodes = new Map<string, unknown>();
+  private nodeRefs = new Map<string, RuntimeNodeHandle>();
+  private nodeValues = new WeakMap<RuntimeNodeHandle, unknown>();
   private bindings: BindingEntry[] = [];
   private watchers: WatchEntry[] = [];
-  private frameHandlers: ((time: number) => void)[] = [];
-  private events = new Map<any, Map<string, Array<(value?: any) => void>>>();
+  private frameHandlers: Array<(time: number, delta: number) => void> = [];
+  private events = new Map<unknown, Map<string, Array<(value?: RuntimeValue) => void>>>();
   private tweens: TweenEntry[] = [];
   private time = 0;
+  private readonly executor: RuntimeExecutor;
 
-  registerNode(name: string, node: any): void {
+  constructor(limits: Partial<RuntimeLimits> = {}) {
+    this.executor = new RuntimeExecutor(limits);
+  }
+
+  registerNode(name: string, node: unknown): void {
+    assertSafeName(name);
     this.nodes.set(name, node);
-    this.resolvedNodeArgs.clear();
+    this.nodeRefs.delete(name);
   }
 
   registerNodes(map: NodeMap): void {
-    for (const [name, node] of Object.entries(map)) {
-      this.nodes.set(name, node);
-    }
-    this.resolvedNodeArgs.clear();
+    for (const [name, node] of Object.entries(map)) this.registerNode(name, node);
   }
 
-  resolveNode(name: string): any {
+  resolveNode(name: string): RuntimeNodeHandle {
+    assertSafeName(name);
     const node = this.nodes.get(name);
     if (node === undefined) {
-      throw new Error(`节点「${name}」未找到。请先用 registerNode("${name}", ...) 注册它。`);
+      throw new RuntimeExecutionError("RUNTIME_INVALID_VALUE", `节点「${name}」未找到。请先用 registerNode("${name}", ...) 注册它。`);
     }
-    return node;
+    const existing = this.nodeRefs.get(name);
+    if (existing) return existing;
+    const ref: RuntimeNodeHandle = Object.freeze({ kind: "RuntimeNode", name });
+    this.nodeRefs.set(name, ref);
+    this.nodeValues.set(ref, node);
+    return ref;
   }
 
-  private resolveNodeArgs(nodeNames: readonly string[]): any[] {
-    const key = nodeNames.join("\u0000");
-    const cached = this.resolvedNodeArgs.get(key);
-    if (cached) return cached;
-    const resolved = new Array<any>(nodeNames.length);
-    for (let i = 0; i < nodeNames.length; i += 1) resolved[i] = this.resolveNode(nodeNames[i]);
-    if (this.resolvedNodeArgs.size >= MAX_COMPILED_EXECUTORS) {
-      const oldest = this.resolvedNodeArgs.keys().next().value;
-      if (oldest !== undefined) this.resolvedNodeArgs.delete(oldest);
+  readNodeProperty(node: RuntimeNodeHandle, property: string): RuntimeValue {
+    assertSafeProperty(property);
+    const target = this.rawNode(node);
+    if (target === null || (typeof target !== "object" && typeof target !== "function")) {
+      throw new RuntimeExecutionError("RUNTIME_INVALID_VALUE", `节点「${node.name}」不支持属性读取`);
     }
-    this.resolvedNodeArgs.set(key, resolved);
-    return resolved;
+    const descriptor = Object.getOwnPropertyDescriptor(target as object, property);
+    if (!descriptor) return undefined;
+    const value = "value" in descriptor ? descriptor.value : Reflect.get(target as object, property);
+    if (typeof value === "function") {
+      throw new RuntimeExecutionError("RUNTIME_UNSUPPORTED_OPERATION", `禁止将节点方法「${node.name}.${property}」作为数据读取`);
+    }
+    return value as RuntimeValue;
   }
 
-  bind = (getter: () => any, node: any, prop: string): void => {
-    this.bindings.push({ getter, node, prop, prev: undefined, initialized: false });
-  };
-
-  watch = (getter: () => any, handler: (value: any) => void): void => {
-    this.watchers.push({ getter, handler, prev: undefined, initialized: false });
-  };
-
-  onFrame = (handler: (time: number) => void): void => {
-    this.frameHandlers.push(handler);
-  };
-
-  /** Animate node[prop] from its current value to `value` over `duration` seconds. */
-  animate = (node: any, prop: string, value: any, duration: number): void => {
-    const from = node[prop];
-    const isVector = isVectorLike(from);
-    const to = isVector ? normalizeVector(value) : value;
-    this.tweens.push({ node, prop, from: isVector ? normalizeVector(from) : from, to, duration, elapsed: 0, isVector });
-  };
-
-  /** Animate a node's position to another node's position over `duration` seconds. */
-  animateTo = (node: any, target: any, duration: number): void => {
-    const from = node.position ?? node;
-    const to = target.position ?? target;
-    this.tweens.push({ node, prop: "position", from: normalizeVector(from), to: normalizeVector(to), duration, elapsed: 0, isVector: true });
-  };
-
-  on = (node: any, event: string, handler: (value?: any) => void): void => {
-    if (node == null) {
-      throw new Error(`无法给空节点注册事件「${event}」`);
+  writeNodeProperty(node: RuntimeNodeHandle, property: string, value: RuntimeValue): void {
+    assertSafeProperty(property);
+    const target = this.rawNode(node);
+    if (target === null || (typeof target !== "object" && typeof target !== "function")) {
+      throw new RuntimeExecutionError("RUNTIME_INVALID_VALUE", `节点「${node.name}」不支持属性写入`);
     }
-    // Prefer the node's native listener interface if present.
-    if (typeof node.addEventListener === "function") {
-      node.addEventListener(event, handler);
+    const next = this.toHostValue(value);
+    const descriptor = Object.getOwnPropertyDescriptor(target as object, property);
+    if (descriptor && !descriptor.writable && !descriptor.set) {
+      throw new RuntimeExecutionError("RUNTIME_HOST_FAILURE", `节点「${node.name}.${property}」写入被拒绝`);
+    }
+    if (descriptor?.set) {
+      descriptor.set.call(target, next);
       return;
     }
-    let eventMap = this.events.get(node);
+    Object.defineProperty(target as object, property, {
+      configurable: descriptor?.configurable ?? true,
+      enumerable: descriptor?.enumerable ?? true,
+      writable: true,
+      value: next,
+    });
+  }
+
+  invokeNodeMethod(node: RuntimeNodeHandle, method: string, args: readonly RuntimeValue[]): RuntimeValue {
+    assertSafeProperty(method);
+    const target = this.rawNode(node);
+    if (target === null || (typeof target !== "object" && typeof target !== "function")) {
+      throw new RuntimeExecutionError("RUNTIME_INVALID_VALUE", `节点「${node.name}」不支持方法调用`);
+    }
+    const callable = Reflect.get(target as object, method);
+    if (!Object.prototype.hasOwnProperty.call(target, method) || typeof callable !== "function") {
+      throw new RuntimeExecutionError("RUNTIME_INVALID_VALUE", `节点「${node.name}.${method}」不是可调用方法`);
+    }
+    return callable.apply(target, args.map((arg) => this.toHostValue(arg))) as RuntimeValue;
+  }
+
+  registerBinding(getter: () => RuntimeValue, node: RuntimeNodeHandle, property: string): void {
+    assertSafeProperty(property);
+    this.bindings.push({ getter, node, prop: property, prev: undefined, initialized: false });
+  }
+
+  registerWatch(getter: () => RuntimeValue, handler: (value: RuntimeValue) => void): void {
+    this.watchers.push({ getter, handler, prev: undefined, initialized: false });
+  }
+
+  registerFrame(handler: (time: number, delta: number) => void): void {
+    this.frameHandlers.push(handler);
+  }
+
+  registerEvent(node: RuntimeNodeHandle, event: string, handler: (value?: RuntimeValue) => void): void {
+    assertSafeProperty(event);
+    const target = this.rawNode(node);
+    if (target === null || (typeof target !== "object" && typeof target !== "function")) {
+      throw new RuntimeExecutionError("RUNTIME_INVALID_VALUE", `节点「${node.name}」不支持事件`);
+    }
+    const nativeAddEventListener = Reflect.get(target as object, "addEventListener");
+    if (typeof nativeAddEventListener === "function") {
+      nativeAddEventListener.call(target, event, handler);
+      return;
+    }
+    let eventMap = this.events.get(target);
     if (!eventMap) {
       eventMap = new Map();
-      this.events.set(node, eventMap);
+      this.events.set(target, eventMap);
     }
     let handlers = eventMap.get(event);
     if (!handlers) {
@@ -195,96 +207,129 @@ export class BadodoRuntime {
       eventMap.set(event, handlers);
     }
     handlers.push(handler);
+  }
+
+  animate(node: RuntimeNodeHandle, property: string, value: RuntimeValue, duration: number): void {
+    assertSafeProperty(property);
+    const from = this.readNodeProperty(node, property);
+    const isVector = isVectorLike(from);
+    this.tweens.push({
+      node,
+      prop: property,
+      from: isVector ? normalizeVector(from) : from,
+      to: isVector ? normalizeVector(value) : value,
+      duration: Math.max(0, duration),
+      elapsed: 0,
+      isVector,
+    });
+  }
+
+  animateTo(node: RuntimeNodeHandle, target: RuntimeNodeHandle, duration: number): void {
+    const from = this.readNodeProperty(node, "position") ?? this.rawNode(node);
+    const to = this.readNodeProperty(target, "position") ?? this.rawNode(target);
+    this.tweens.push({
+      node,
+      prop: "position",
+      from: normalizeVector(from),
+      to: normalizeVector(to),
+      duration: Math.max(0, duration),
+      elapsed: 0,
+      isVector: true,
+    });
+  }
+
+  /** Compatibility helper for hosts that still call the legacy callback name. */
+  bind = (getter: () => any, node: any, prop: string): void => {
+    this.registerBinding(getter, this.asNodeHandle(node), prop);
   };
 
-  /** Dispatch an event to all handlers registered via `on`. */
-  emit(node: any, event: string, value?: any): void {
-    const eventMap = this.events.get(node);
-    if (!eventMap) return;
-    const handlers = eventMap.get(event);
+  watch = (getter: () => any, handler: (value: any) => void): void => {
+    this.registerWatch(getter, handler);
+  };
+
+  onFrame = (handler: (time: number) => void): void => {
+    this.registerFrame((time) => handler(time));
+  };
+
+  on = (node: any, event: string, handler: (value?: any) => void): void => {
+    this.registerEvent(this.asNodeHandle(node), event, handler);
+  };
+
+  /** Dispatch an event to handlers registered through the explicit host boundary. */
+  emit(node: any, event: string, value?: RuntimeValue): void {
+    assertSafeProperty(event);
+    const target = isNodeHandle(node) ? this.rawNode(node) : node;
+    const handlers = this.events.get(target)?.get(event);
     if (!handlers) return;
-    const handlerCount = handlers.length;
-    for (let i = 0; i < handlerCount; i += 1) handlers[i](value);
+    for (const handler of [...handlers]) handler(value);
   }
 
-  /** Run a Badodo Script source string against the registered nodes. */
-  run(source: string): void {
-    const { ast, typescript } = compileWithAst(source);
-    if (ast.body.some((stmt) => stmt.kind === "ImportDecl")) {
-      throw new Error("包含 import 的 BDS 必须先交给 Node/浏览器 bundler 解析，再调用 runCompiled 执行");
+  /** Parse canonical source and execute its structured runtime representation. */
+  run(source: string, sourceName = "source.bds"): void {
+    this.runProgram(compileRuntime(source, sourceName));
+  }
+
+  runProgram(program: RuntimeProgram): void {
+    this.executor.execute(program, this);
+  }
+
+  /**
+   * Legacy entry point deliberately refuses generated code. Keeping the name
+   * makes stale callers fail closed instead of regressing to dynamic eval.
+   */
+  runCompiled(program: RuntimeProgram): void;
+  runCompiled(code: string, nodeNames: readonly string[]): never;
+  runCompiled(programOrCode: RuntimeProgram | string): void {
+    if (typeof programOrCode === "string") {
+      throw new RuntimeExecutionError("RUNTIME_UNSUPPORTED_OPERATION", "runCompiled 不再执行生成 JavaScript；请使用 run() 或 runProgram() 传入 RuntimeProgram");
     }
-    const nodeNames = collectNodes(ast);
-    this.runCompiled(typescript, nodeNames);
+    this.runProgram(programOrCode);
   }
 
-  /** Execute already-compiled JavaScript with the given node names injected. */
-  runCompiled(code: string, nodeNames: string[]): void {
-    assertBdsPayload({ version: BDS_PAYLOAD_VERSION, nodeNames, code });
-    const args = [
-      ...this.resolveNodeArgs(nodeNames),
-      this.bind,
-      this.watch,
-      this.onFrame,
-      this.on,
-      this.animate,
-      this.animateTo,
-      vec3,
-      color,
-      some,
-      none,
-      ok,
-      err,
-      is_ok,
-      unwrap,
-    ];
-    const cacheKey = `${nodeNames.join("\u0000")}\u0000${code}`;
-    let fn = COMPILED_EXECUTOR_CACHE.get(cacheKey);
-    if (!fn) {
-      fn = new Function(...nodeNames, "bind", "watch", "onFrame", "on", "animate", "animateTo", "vec3", "color", "some", "none", "ok", "err", "is_ok", "unwrap", code) as CompiledExecutor;
-      if (COMPILED_EXECUTOR_CACHE.size >= MAX_COMPILED_EXECUTORS) {
-        const oldest = COMPILED_EXECUTOR_CACHE.keys().next().value;
-        if (oldest !== undefined) COMPILED_EXECUTOR_CACHE.delete(oldest);
-      }
-      COMPILED_EXECUTOR_CACHE.set(cacheKey, fn);
-    }
-    fn(...args);
-  }
-
-  /** Advance one frame. Call this from Babylon's render loop or requestAnimationFrame. */
+  /** Advance one frame from a Babylon render loop or requestAnimationFrame. */
   tick(deltaTime: number): void {
+    try {
+      this.tickInternal(deltaTime);
+    } catch (error) {
+      if (error instanceof RuntimeExecutionError) throw error;
+      throw new RuntimeExecutionError("RUNTIME_HOST_FAILURE", `帧运行失败: ${error instanceof Error ? error.message : String(error)}`, undefined, error);
+    }
+  }
+
+  private tickInternal(deltaTime: number): void {
+    if (!Number.isFinite(deltaTime) || deltaTime < 0) throw new RuntimeExecutionError("RUNTIME_INVALID_VALUE", "deltaTime 必须是非负有限数字");
     this.time += deltaTime;
 
-    for (const handler of this.frameHandlers) {
-      handler(this.time);
-    }
+    for (const handler of [...this.frameHandlers]) handler(this.time, deltaTime);
 
-    for (const w of this.watchers) {
-      const value = w.getter();
-      if (!w.initialized || !Object.is(value, w.prev)) {
-        w.initialized = true;
-        w.prev = value;
-        w.handler(value);
+    for (const watcher of [...this.watchers]) {
+      const value = watcher.getter();
+      if (!watcher.initialized || !Object.is(value, watcher.prev)) {
+        watcher.handler(value);
+        watcher.initialized = true;
+        watcher.prev = value;
       }
     }
 
-    for (const b of this.bindings) {
-      const value = b.getter();
-      if (!b.initialized || !Object.is(value, b.prev)) {
-        b.initialized = true;
-        b.prev = value;
-        b.node[b.prop] = value;
+    for (const binding of [...this.bindings]) {
+      const value = binding.getter();
+      if (!binding.initialized || !Object.is(value, binding.prev)) {
+        this.writeNodeProperty(binding.node, binding.prop, value);
+        binding.initialized = true;
+        binding.prev = value;
       }
     }
 
     let activeTweens = 0;
-    for (let i = 0; i < this.tweens.length; i += 1) {
-      const tween = this.tweens[i];
+    for (const tween of this.tweens) {
       tween.elapsed += deltaTime;
-      const t = Math.min(tween.elapsed / tween.duration, 1);
+      const t = tween.duration === 0 ? 1 : Math.min(tween.elapsed / tween.duration, 1);
       if (tween.isVector) {
-        writeVectorLerp(tween.node, tween.prop, tween.from, tween.to, t);
+        writeVectorLerp(this, tween.node, tween.prop, normalizeVector(tween.from), normalizeVector(tween.to), t);
       } else {
-        tween.node[tween.prop] = tween.from + (tween.to - tween.from) * t;
+        const from = requireFiniteNumber(tween.from, "动画起始值");
+        const to = requireFiniteNumber(tween.to, "动画目标值");
+        this.writeNodeProperty(tween.node, tween.prop, from + (to - from) * t);
       }
       if (t < 1) {
         this.tweens[activeTweens] = tween;
@@ -305,52 +350,98 @@ export class BadodoRuntime {
     };
     requestAnimationFrame(loop);
   }
+
+  private rawNode(node: RuntimeNodeHandle): any {
+    if (!isNodeHandle(node)) throw new RuntimeExecutionError("RUNTIME_INVALID_VALUE", "无效的 runtime 节点句柄");
+    const value = this.nodeValues.get(node);
+    if (value === undefined) throw new RuntimeExecutionError("RUNTIME_INVALID_VALUE", `节点「${node.name}」句柄已失效`);
+    return value;
+  }
+
+  private asNodeHandle(node: unknown): RuntimeNodeHandle {
+    if (isNodeHandle(node)) return node;
+    for (const ref of this.nodeRefs.values()) if (this.nodeValues.get(ref) === node) return ref;
+    const ref = Object.freeze({ kind: "RuntimeNode", name: "<legacy>" }) as RuntimeNodeHandle;
+    this.nodeValues.set(ref, node);
+    return ref;
+  }
+
+  private toHostValue(value: RuntimeValue): unknown {
+    if (isNodeHandle(value)) return this.rawNode(value);
+    if (Array.isArray(value)) return value.map((item) => this.toHostValue(item));
+    if (value !== null && typeof value === "object" && !isCallableLike(value)) {
+      const result: Record<string, unknown> = {};
+      for (const [key, item] of Object.entries(value as Record<string, RuntimeValue>)) result[key] = this.toHostValue(item);
+      return result;
+    }
+    return value;
+  }
 }
 
-interface CompileWithAstResult {
-  ast: Program;
-  typescript: string;
+/** Compatibility no-op: runtime no longer caches compiled JavaScript executors. */
+export function clearRuntimeCompilationCache(): void {
+  // Intentionally empty. Structured RuntimeProgram data needs no JS compiler cache.
 }
 
-function compileWithAst(source: string): CompileWithAstResult {
-  const tokens = tokenize(source);
-  const ast = parse(tokens);
-  const typescript = generateTypeScript(ast);
-  return { ast, typescript };
+export function runtimeCompilationCacheSize(): number {
+  return 0;
 }
 
-function isVectorLike(value: any): boolean {
-  return (
-    value != null &&
-    typeof value === "object" &&
-    typeof value.x === "number" &&
-    typeof value.y === "number"
-  );
+function assertSafeName(name: string): void {
+  if (typeof name !== "string" || name.length === 0 || isUnsafeRuntimeName(name)) {
+    throw new RuntimeExecutionError("RUNTIME_UNSUPPORTED_OPERATION", `名称「${name}」被运行时安全策略拒绝`);
+  }
 }
 
-function normalizeVector(value: any): { x: number; y: number; z: number } {
-  return {
-    x: value?.x ?? 0,
-    y: value?.y ?? 0,
-    z: value?.z ?? 0,
-  };
+function assertSafeProperty(property: string): void {
+  if (typeof property !== "string" || property.length === 0 || isUnsafeRuntimeName(property)) {
+    throw new RuntimeExecutionError("RUNTIME_UNSUPPORTED_OPERATION", `属性「${property}」被运行时安全策略拒绝`);
+  }
 }
 
-function writeVectorLerp(node: any, prop: string, from: { x: number; y: number; z: number }, to: { x: number; y: number; z: number }, t: number): void {
-  const x = from.x + (to.x - from.x) * t;
-  const y = from.y + (to.y - from.y) * t;
-  const z = from.z + (to.z - from.z) * t;
-  if (prop === "position" && node.position && typeof node.position === "object") {
-    node.position.x = x;
-    node.position.y = y;
-    node.position.z = z;
+function isNodeHandle(value: unknown): value is RuntimeNodeHandle {
+  return value !== null && typeof value === "object" && (value as { kind?: unknown }).kind === "RuntimeNode";
+}
+
+function isCallableLike(value: unknown): boolean {
+  return value !== null && typeof value === "object" && (value as { kind?: unknown }).kind === "RuntimeCallable";
+}
+
+function isVectorLike(value: RuntimeValue): boolean {
+  return value !== null && typeof value === "object" && !Array.isArray(value) &&
+    typeof (value as Record<string, unknown>).x === "number" &&
+    typeof (value as Record<string, unknown>).y === "number";
+}
+
+function normalizeVector(value: unknown): { x: number; y: number; z: number } {
+  if (value !== null && typeof value === "object" && !Array.isArray(value)) {
+    const object = value as Record<string, unknown>;
+    return {
+      x: typeof object.x === "number" ? object.x : 0,
+      y: typeof object.y === "number" ? object.y : 0,
+      z: typeof object.z === "number" ? object.z : 0,
+    };
+  }
+  return { x: 0, y: 0, z: 0 };
+}
+
+function writeVectorLerp(runtime: BadodoRuntime, node: RuntimeNodeHandle, property: string, from: { x: number; y: number; z: number }, to: { x: number; y: number; z: number }, t: number): void {
+  const current = runtime.readNodeProperty(node, property);
+  if (current !== null && typeof current === "object" && !Array.isArray(current)) {
+    const target = current as Record<string, unknown>;
+    target.x = from.x + (to.x - from.x) * t;
+    target.y = from.y + (to.y - from.y) * t;
+    target.z = from.z + (to.z - from.z) * t;
     return;
   }
-  if (node[prop] && typeof node[prop] === "object") {
-    node[prop].x = x;
-    node[prop].y = y;
-    node[prop].z = z;
-    return;
-  }
-  node[prop] = { x, y, z };
+  runtime.writeNodeProperty(node, property, {
+    x: from.x + (to.x - from.x) * t,
+    y: from.y + (to.y - from.y) * t,
+    z: from.z + (to.z - from.z) * t,
+  });
+}
+
+function requireFiniteNumber(value: RuntimeValue, label: string): number {
+  if (typeof value !== "number" || !Number.isFinite(value)) throw new RuntimeExecutionError("RUNTIME_INVALID_VALUE", `${label} 必须是有限数字`);
+  return value;
 }

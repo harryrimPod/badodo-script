@@ -3,6 +3,8 @@ import { assertBdsPayload, BdsPayload } from "../payload";
 import { verifySignedArtifactBrowser } from "./signed";
 
 export { BadodoRuntime, some, none, ok, err, is_ok, unwrap } from "./runtime";
+export { compileRuntime, assertRuntimeProgram, RUNTIME_PROGRAM_VERSION } from "./program";
+export { RuntimeExecutionError } from "./errors";
 export * from "../adapters/babylon";
 export * from "../adapters/maplibre";
 export * from "./signed";
@@ -89,11 +91,13 @@ export async function runSignedEncrypted(
   requiredFeature?: string,
 ): Promise<void> {
   const payload = await loadSignedEncrypted(url, passphrase, publicKeyPem, now, requiredFeature);
-  runtime.runCompiled(payload.code, payload.nodeNames);
+  if (!payload.runtimeProgram) throw new Error("加密 payload 缺少 bounded RuntimeProgram；请重新打包 BDS 文件");
+  runtime.runProgram(payload.runtimeProgram);
 }
 
 /** Decrypt + execute an encrypted script against the given runtime. */
 export async function runEncrypted(runtime: BadodoRuntime, url: string, passphrase: string): Promise<void> {
   const payload = await loadEncrypted(url, passphrase);
-  runtime.runCompiled(payload.code, payload.nodeNames);
+  if (!payload.runtimeProgram) throw new Error("加密 payload 缺少 bounded RuntimeProgram；请重新打包 BDS 文件");
+  runtime.runProgram(payload.runtimeProgram);
 }

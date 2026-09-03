@@ -192,7 +192,7 @@ camera.look_at(target)
 
 编译时通过 AST 收集节点名，运行时 `registerNode(name, object)` 注入。未注册节点会抛 `节点「xxx」未找到`。
 
-- 保留字节点名（如 `switch`）在 `bds run` 下会自动别名为 `__bds_node_switch` 执行，`compile` 输出保持原名。
+- 保留字节点名（如 `switch`）可直接使用；bounded runtime 按结构化 AST 求值，不经 JavaScript 编译，`compile` 输出保持原名。
 - `bds run` 的本地 fixture 节点为 Proxy，`addEventListener` 为 `undefined` 以保留 Runtime 的内存事件注册，未知方法为 no-op。
 
 ---
@@ -377,6 +377,6 @@ for item in items:
 
 ## 15. 附录：保留字与限制
 
-- **保留字**：`if else repeat func return when bind watch every animate to in import from as async await type enum true false null`，以及 `bds run` 下的 38 个 JS 保留字别名（`switch` 等）。
+- **保留字**：`if else repeat func return when bind watch every animate to in import from as async await type enum true false null`。
 - **尚未支持**：动态模块执行、泛型自定义类型、函数默认/命名参数、深度响应式（`bind/watch` 为每帧轮询）、绝对安全的客户端加密。
 - **更多规范**：见 `docs/spec.md`；验收边界见 `docs/ga-contract.md`。

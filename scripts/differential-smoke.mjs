@@ -158,6 +158,53 @@ when button.click:
     triggers: [{ kind: "emit", node: "button", event: "click" }, { kind: "emit", node: "button", event: "click" }],
   },
   {
+    name: "when with nested if/repeat updates counter (no copies)",
+    source: `
+count = 0
+when button.click:
+    if count < 10:
+        count = count + 1
+    repeat 2:
+        count = count + 10
+    out.record(count)
+`,
+    nodes: ["button"],
+    triggers: [{ kind: "emit", node: "button", event: "click" }, { kind: "emit", node: "button", event: "click" }, { kind: "emit", node: "button", event: "click" }],
+  },
+  {
+    name: "two handlers share one top-level counter",
+    source: `
+count = 0
+when button.click:
+    count = count + 1
+    out.record(count)
+when alarm.click:
+    count = count + 100
+    out.record(count)
+`,
+    nodes: ["button", "alarm"],
+    triggers: [{ kind: "emit", node: "button", event: "click" }, { kind: "emit", node: "alarm", event: "click" }, { kind: "emit", node: "button", event: "click" }],
+  },
+  {
+    name: "function reads top-level variable without assigning",
+    source: `
+x = 5
+func f():
+    return x + 1
+out.record(f())
+`,
+  },
+  {
+    name: "function assigns same name as top-level without reading it",
+    source: `
+x = 1
+func f():
+    x = 2
+f()
+out.record(x)
+`,
+  },
+  {
     name: "every frame accumulates with time",
     source: `
 acc = 0

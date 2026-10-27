@@ -347,5 +347,83 @@ out.record(level)
   check("块内变量在块外不可见，块外重新声明", JSON.stringify(out.values) === "[1,3]", JSON.stringify(out.values));
 }
 
+console.log("\n嵌套块不创建副本（补充回归）：");
+
+{
+  const out = probe();
+  const button = { __name: "button" };
+  const rt = new BadodoRuntime();
+  rt.registerNode("out", out);
+  rt.registerNode("button", button);
+  rt.run(`
+count = 0
+when button.click:
+    if count < 10:
+        count = count + 1
+    repeat 2:
+        count = count + 10
+    out.record(count)
+`);
+  rt.emit(button, "click");
+  rt.emit(button, "click");
+  check("when 内 if/repeat 多层嵌套仍更新顶层计数器", JSON.stringify(out.values) === "[21,41]", JSON.stringify(out.values));
+}
+
+{
+  const out = probe();
+  const rt = new BadodoRuntime();
+  rt.registerNode("out", out);
+  rt.run(`
+frames = 0
+every frame:
+    frames = frames + 1
+    out.record(frames)
+`);
+  rt.tick(0.1);
+  rt.tick(0.1);
+  rt.tick(0.1);
+  check("every frame 计数器逐帧累加", JSON.stringify(out.values) === "[1,2,3]", JSON.stringify(out.values));
+}
+
+{
+  const out = probe();
+  const sensor = { __name: "sensor", temperature: 1 };
+  const rt = new BadodoRuntime();
+  rt.registerNode("out", out);
+  rt.registerNode("sensor", sensor);
+  rt.run(`
+changes = 0
+watch sensor.temperature:
+    changes = changes + 1
+    out.record(changes)
+`);
+  rt.tick(0.016);
+  sensor.temperature = 2;
+  rt.tick(0.016);
+  sensor.temperature = 3;
+  rt.tick(0.016);
+  const values = out.values as number[];
+  check("watch 回调计数器累加（不创建副本）", values.length >= 2 && values.every((v, i) => v === i + 1), JSON.stringify(out.values));
+}
+
+expectTs("when 内多层嵌套只在顶层声明一次", `
+count = 0
+when button.click:
+    if count < 10:
+        count = count + 1
+    repeat 2:
+        count = count + 10
+`, `
+let count = 0;
+on(button, "click", () => {
+  if (count < 10) {
+    count = count + 1;
+  }
+  for (let __i = 0; __i < 2; __i++) {
+    count = count + 10;
+  }
+});
+`);
+
 console.log(`\nResults: ${passed} passed, ${failed} failed`);
 if (failed > 0) process.exit(1);

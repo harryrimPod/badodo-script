@@ -72,6 +72,7 @@ const SCOPE_CASES = [
   { name: "for accumulates outer", source: "total = 0\nfor item in [1, 2, 3]:\n    total = total + item\nout.record(total)\n" },
   { name: "repeat per-iteration variable", source: "repeat 2:\n    n = 1\n    n = n + 1\n    out.record(n)\n" },
   { name: "when updates counter", source: "count = 0\nwhen button.click:\n    count = count + 1\n    out.record(count)\n" },
+  { name: "when nested if/repeat counter", source: "count = 0\nwhen button.click:\n    if count < 10:\n        count = count + 1\n    repeat 2:\n        count = count + 10\n    out.record(count)\n" },
   { name: "watch implicit value", source: "watch sensor.temperature:\n    value = value + 1\n    out.record(value)\n" },
   { name: "every frame implicit time", source: "acc = 0\nevery frame:\n    time = time * 2\n    acc = acc + time\n" },
   { name: "annotated redeclaration", source: "x: i32 = 1\nx: i32 = 2\nout.record(x)\n", emitTypes: true },

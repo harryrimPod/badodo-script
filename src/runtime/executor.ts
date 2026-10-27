@@ -1,6 +1,7 @@
 import * as AST from "../ast";
 import { RuntimeExecutionError, asRuntimeHostFailure } from "./errors";
 import { assertRuntimeProgram, isUnsafeRuntimeName, RuntimeProgram } from "./program";
+import { resolveScopes } from "../scope";
 
 export type RuntimePrimitive = null | boolean | number | string;
 
@@ -102,6 +103,13 @@ class ReturnSignal {
  */
 export class RuntimeExecutor {
   readonly limits: RuntimeLimits;
+  /**
+   * `VarDecl` nodes that assign an existing binding (docs/spec.md 5.1.1),
+   * collected per executed program. Keyed by node identity, so programs run
+   * by the same executor never affect each other.
+   */
+  private readonly reassignments = new WeakSet<AST.VarDecl>();
+  private readonly resolvedPrograms = new WeakSet<AST.Program>();
 
   constructor(limits: Partial<RuntimeLimits> = {}) {
     this.limits = normalizeLimits(limits);
@@ -111,6 +119,7 @@ export class RuntimeExecutor {
     const program = assertRuntimeProgram(programInput);
     const state = this.newState();
     this.assertExecutableProgram(program, state);
+    this.resolveProgramScopes(program.ast);
     const root = new Environment();
     this.installBuiltins(root);
     this.predeclareFunctions(program.ast.body, root, state);
@@ -120,6 +129,36 @@ export class RuntimeExecutor {
       if (error instanceof ReturnSignal) return;
       throw this.normalizeRuntimeError(error);
     }
+  }
+
+  private resolveProgramScopes(ast: AST.Program): void {
+    if (this.resolvedPrograms.has(ast)) return;
+    const resolution = resolveScopes(ast);
+    const collect = (statements: readonly AST.Stmt[]): void => {
+      for (const statement of statements) {
+        switch (statement.kind) {
+          case "VarDecl":
+            if (resolution.isReassignment(statement)) this.reassignments.add(statement);
+            break;
+          case "If":
+            collect(statement.thenBlock.body);
+            if (statement.elseBlock) collect(statement.elseBlock.body);
+            break;
+          case "Repeat":
+          case "FuncDef":
+          case "When":
+          case "WatchStmt":
+          case "EveryFrame":
+          case "ForIn":
+            collect(statement.body.body);
+            break;
+          default:
+            break;
+        }
+      }
+    };
+    collect(ast.body);
+    this.resolvedPrograms.add(ast);
   }
 
   private newState(): ExecutionState {
@@ -237,9 +276,15 @@ export class RuntimeExecutor {
       }
       case "ImportDecl":
         throw new RuntimeExecutionError("RUNTIME_UNSUPPORTED_OPERATION", "运行时不能执行 import", statement.line);
-      case "VarDecl":
-        environment.define(statement.name, this.evaluate(statement.value, environment, state, host, statement.line));
+      case "VarDecl": {
+        const value = this.evaluate(statement.value, environment, state, host, statement.line);
+        if (this.reassignments.has(statement)) {
+          environment.assign(statement.name, value);
+        } else {
+          environment.define(statement.name, value);
+        }
         return;
+      }
       case "Assign":
         this.assign(statement.target, this.evaluate(statement.value, environment, state, host, statement.line), environment, state, host, statement.line);
         return;

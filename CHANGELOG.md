@@ -1,5 +1,12 @@
 # Changelog
 
+## Unreleased
+
+- Fixed duplicate `let` in generated TypeScript: a variable is declared once per scope and later assignments are plain assignments (new `src/scope.ts`).
+- The structured executor applies the same rule, so assignments in nested blocks (`if`/`repeat`/`for`/`when`/`watch`/`every frame`) update the outer variable instead of creating a block-local copy. Function bodies remain a boundary. Rule documented in `docs/spec.md` 5.1.1.
+- Indentation and end-of-line diagnostics are concrete Chinese messages with expected/actual widths and the correct line, instead of `无法理解「」`.
+- Added `test:scope`, `test:indent-diagnostics`, `test:generated-ts` (strict `tsc` check of generated examples) and `test:differential` (executor vs generated TS) to `npm run verify`.
+
 ## 0.2.0 - 2026-09-03
 
 - Replaced generated-JS evaluation with a bounded structured runtime: `RuntimeProgram` (versioned, frozen canonical AST) + `RuntimeExecutor` with step/loop/call-depth limits, unsafe-name blocking, and typed `RuntimeExecutionError`s.

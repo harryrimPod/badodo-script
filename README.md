@@ -146,6 +146,8 @@ npx --yes github:harryrimPod/badodo-script run examples/door.bds
 包含 `dist/`、示例及 `wabt` 的 Node 分发包；资产校验与重建步骤见
 [`docs/distribution.md`](docs/distribution.md)。
 
+> 验证范围：v0.2.0 的全部资产都与 `SHA256SUMS.txt` 一致；Node 分发包 `badodo-script-0.2.0-dist.zip` 已在 Linux（Node 22）上解压，并跑通 `node dist/cli.js --version` 和 `run`。`bds.exe` 与 Windows 零安装包只核对了校验和和文件格式（PE32+ x86-64），**没有在 Windows 上实际运行**。
+
 也可安装到项目中（推荐，版本写入 `package.json`）：
 
 > 说明：`badodo-script` 尚未发布到 npm 注册表，`npm install badodo-script` 目前会返回 404。下面的命令都直接从 GitHub 仓库安装（npm 会在安装时自动执行 `prepare` 构建 `dist/`），已在干净环境中实测。

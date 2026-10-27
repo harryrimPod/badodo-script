@@ -135,6 +135,8 @@ var Badodo = (() => {
       return this.readOperatorOrPunct();
     }
     handleNewline() {
+      const endLine = this.line;
+      const endCol = this.col;
       this.advance();
       this.line++;
       this.col = 1;
@@ -146,23 +148,28 @@ var Badodo = (() => {
       const currentIndent = this.indentStack[this.indentStack.length - 1];
       if (indent > currentIndent) {
         this.indentStack.push(indent);
-        return this.makeToken("INDENT" /* INDENT */, "");
+        return { ...this.makeToken("INDENT" /* INDENT */, ""), indent: { expected: currentIndent, actual: indent } };
       }
       if (indent < currentIndent) {
         const dedents = [];
+        const validLevels = [...this.indentStack];
         while (indent < this.indentStack[this.indentStack.length - 1]) {
           this.indentStack.pop();
           dedents.push(this.makeToken("DEDENT" /* DEDENT */, ""));
         }
         if (indent !== this.indentStack[this.indentStack.length - 1]) {
-          throw new LexerError("\u7F29\u8FDB\u4E0D\u4E00\u81F4\uFF0C\u8BF7\u68C0\u67E5\u8FD9\u4E00\u884C\u7684\u7A7A\u683C\u6570\u91CF\u662F\u5426\u548C\u4E0A\u4E00\u884C\u5BF9\u9F50", this.line, this.col);
+          throw new LexerError(
+            `\u7F29\u8FDB\u4E0D\u4E00\u81F4\uFF1A\u8FD9\u4E00\u884C\u5E94\u4E3A ${formatIndentLevels(validLevels)} \u4E2A\u7A7A\u683C\uFF0C\u5B9E\u9645 ${indent} \u4E2A\u7A7A\u683C\u3002\u8BF7\u8BA9\u5B83\u548C\u4E0A\u9762\u67D0\u4E00\u5C42\u4EE3\u7801\u5BF9\u9F50`,
+            this.line,
+            this.col
+          );
         }
         if (dedents.length > 0) {
           this.pendingTokens.push(...dedents.slice(1));
           return dedents[0];
         }
       }
-      return this.makeToken("NEWLINE" /* NEWLINE */, "");
+      return this.makeToken("NEWLINE" /* NEWLINE */, "", endLine, endCol);
     }
     findNextNonSpacePos() {
       let i = this.pos;
@@ -323,6 +330,11 @@ var Badodo = (() => {
   };
   function tokenize(source) {
     return new Lexer(source).tokenize();
+  }
+  function formatIndentLevels(levels) {
+    const unique = [...new Set(levels)].sort((a, b) => a - b);
+    if (unique.length <= 1) return String(unique[0] ?? 0);
+    return `${unique.slice(0, -1).join("\u3001")} \u6216 ${unique[unique.length - 1]}`;
   }
 
   // src/parser.ts
@@ -659,7 +671,7 @@ var Badodo = (() => {
           if (stmt) body.push(stmt);
           this.skipNewlines();
         }
-        this.consume("DEDENT" /* DEDENT */, "Expected end of block");
+        this.consume("DEDENT" /* DEDENT */, "\u4EE3\u7801\u5757\u9700\u8981\u5728\u8FD9\u91CC\u7ED3\u675F\uFF1A\u8BF7\u628A\u4E0B\u4E00\u884C\u7684\u7F29\u8FDB\u9000\u56DE\u5230\u4E0A\u4E00\u5C42");
       } finally {
         this.blockDepth--;
       }
@@ -744,7 +756,7 @@ var Badodo = (() => {
         case "IDENT" /* IDENT */:
           return this.parsePostfix();
         default:
-          throw new ParseError(`\u8FD9\u91CC\u65E0\u6CD5\u7406\u89E3\u300C${token.value}\u300D\u3002\u53EF\u4EE5\u5199\u6570\u5B57\u3001\u6587\u672C\u3001true/false\uFF0C\u6216\u8005\u4E00\u4E2A\u540D\u5B57`, token);
+          throw new ParseError(describeUnexpectedToken(token), token);
       }
       return this.parsePostfixTail(expr);
     }
@@ -870,6 +882,22 @@ var Badodo = (() => {
   };
   function parse(tokens) {
     return new Parser(tokens).parse();
+  }
+  function describeUnexpectedToken(token) {
+    switch (token.type) {
+      case "INDENT" /* INDENT */: {
+        const widths = token.indent ? `\u5E94\u4E3A ${token.indent.expected} \u4E2A\u7A7A\u683C\uFF0C\u5B9E\u9645 ${token.indent.actual} \u4E2A\u7A7A\u683C\u3002` : "";
+        return `\u8FD9\u4E00\u884C\u7684\u7F29\u8FDB\u6BD4\u4E0A\u4E00\u884C\u591A\uFF1A${widths}\u53EA\u6709\u4EE5\u5192\u53F7 : \u7ED3\u5C3E\u7684\u884C\uFF08\u4F8B\u5982 if\u3001when\u3001func\uFF09\u540E\u9762\u624D\u80FD\u589E\u52A0\u7F29\u8FDB`;
+      }
+      case "DEDENT" /* DEDENT */:
+        return "\u4EE3\u7801\u5757\u5728\u8FD9\u91CC\u7ED3\u675F\u4E86\uFF0C\u4F46\u4E0A\u4E00\u884C\u8FD8\u6CA1\u6709\u5199\u5B8C\u3002\u8BF7\u68C0\u67E5\u4E0A\u4E00\u884C\u662F\u5426\u7F3A\u5C11\u5185\u5BB9";
+      case "NEWLINE" /* NEWLINE */:
+        return "\u8FD9\u4E00\u884C\u5728\u8FD9\u91CC\u63D0\u524D\u7ED3\u675F\u4E86\uFF08\u884C\u5C3E\uFF09\uFF0C\u540E\u9762\u8FD8\u9700\u8981\u4E00\u4E2A\u503C\u3002\u53EF\u4EE5\u5199\u6570\u5B57\u3001\u6587\u672C\u3001true/false\uFF0C\u6216\u8005\u4E00\u4E2A\u540D\u5B57";
+      case "EOF" /* EOF */:
+        return "\u4EE3\u7801\u5728\u8FD9\u91CC\u7ED3\u675F\u4E86\uFF08\u6587\u4EF6\u7ED3\u5C3E\uFF09\uFF0C\u540E\u9762\u8FD8\u9700\u8981\u4E00\u4E2A\u503C\u3002\u53EF\u4EE5\u5199\u6570\u5B57\u3001\u6587\u672C\u3001true/false\uFF0C\u6216\u8005\u4E00\u4E2A\u540D\u5B57";
+      default:
+        return token.value ? `\u8FD9\u91CC\u65E0\u6CD5\u7406\u89E3\u300C${token.value}\u300D\u3002\u53EF\u4EE5\u5199\u6570\u5B57\u3001\u6587\u672C\u3001true/false\uFF0C\u6216\u8005\u4E00\u4E2A\u540D\u5B57` : "\u8FD9\u91CC\u65E0\u6CD5\u7406\u89E3\u3002\u53EF\u4EE5\u5199\u6570\u5B57\u3001\u6587\u672C\u3001true/false\uFF0C\u6216\u8005\u4E00\u4E2A\u540D\u5B57";
+    }
   }
 
   // src/runtime/collect-nodes.ts
@@ -1427,6 +1455,98 @@ ${canonicalJson(unsigned)}`))
     throw new Error("canonical JSON \u4E0D\u652F\u6301\u8BE5\u503C");
   }
 
+  // src/scope.ts
+  var REASSIGNABLE = /* @__PURE__ */ new Set(["variable", "parameter", "loop-item", "implicit"]);
+  function resolveScopes(program) {
+    const reassignments = /* @__PURE__ */ new WeakSet();
+    const reassignedLoops = /* @__PURE__ */ new WeakSet();
+    const loopOwners = /* @__PURE__ */ new WeakMap();
+    const lookupAssignable = (scope, name) => {
+      let current = scope;
+      while (current) {
+        const kind = current.bindings.get(name);
+        if (kind !== void 0) return REASSIGNABLE.has(kind) ? current : void 0;
+        if (current.kind === "function" || current.kind === "program") return void 0;
+        current = current.parent;
+      }
+      return void 0;
+    };
+    const block = (parent, statements, implicit) => {
+      const scope = { kind: "block", bindings: /* @__PURE__ */ new Map(), parent };
+      if (implicit) scope.bindings.set(implicit, "implicit");
+      visitAll(statements, scope);
+    };
+    const visitAll = (statements, scope) => {
+      for (const statement of statements) {
+        if (statement.kind === "FuncDef") scope.bindings.set(statement.name, "function");
+      }
+      for (const statement of statements) visit(statement, scope);
+    };
+    const visit = (statement, scope) => {
+      switch (statement.kind) {
+        case "VarDecl": {
+          const owner = lookupAssignable(scope, statement.name);
+          if (owner) {
+            reassignments.add(statement);
+            if (owner.bindings.get(statement.name) === "loop-item") {
+              const loop = loopOwners.get(owner);
+              if (loop) reassignedLoops.add(loop);
+            }
+          } else if (!scope.bindings.has(statement.name)) {
+            scope.bindings.set(statement.name, "variable");
+          }
+          return;
+        }
+        case "EnumDecl":
+          scope.bindings.set(statement.name, "enum");
+          return;
+        case "ImportDecl":
+          if (statement.defaultImport) scope.bindings.set(statement.defaultImport, "import");
+          for (const item of statement.names) scope.bindings.set(item.local, "import");
+          return;
+        case "FuncDef": {
+          const fn = { kind: "function", bindings: /* @__PURE__ */ new Map(), parent: scope };
+          for (const param of statement.params) fn.bindings.set(param, "parameter");
+          visitAll(statement.body.body, fn);
+          return;
+        }
+        case "If":
+          block(scope, statement.thenBlock.body);
+          if (statement.elseBlock) block(scope, statement.elseBlock.body);
+          return;
+        case "Repeat":
+        case "When":
+          block(scope, statement.body.body);
+          return;
+        case "WatchStmt":
+          block(scope, statement.body.body, "value");
+          return;
+        case "EveryFrame":
+          block(scope, statement.body.body, "time");
+          return;
+        case "ForIn": {
+          const loopScope = { kind: "block", bindings: /* @__PURE__ */ new Map([[statement.item, "loop-item"]]), parent: scope };
+          loopOwners.set(loopScope, statement);
+          block(loopScope, statement.body.body);
+          return;
+        }
+        case "Assign":
+        case "Return":
+        case "BindStmt":
+        case "Animate":
+        case "ExpressionStmt":
+        case "TypeDecl":
+        case "SharedDecl":
+          return;
+      }
+    };
+    visitAll(program.body, { kind: "program", bindings: /* @__PURE__ */ new Map() });
+    return {
+      isReassignment: (statement) => reassignments.has(statement),
+      isLoopItemReassigned: (statement) => reassignedLoops.has(statement)
+    };
+  }
+
   // src/runtime/executor.ts
   var DEFAULT_RUNTIME_LIMITS = Object.freeze({
     maxSteps: 1e4,
@@ -1472,6 +1592,13 @@ ${canonicalJson(unsigned)}`))
   };
   var RuntimeExecutor = class {
     limits;
+    /**
+     * `VarDecl` nodes that assign an existing binding (docs/spec.md 5.1.1),
+     * collected per executed program. Keyed by node identity, so programs run
+     * by the same executor never affect each other.
+     */
+    reassignments = /* @__PURE__ */ new WeakSet();
+    resolvedPrograms = /* @__PURE__ */ new WeakSet();
     constructor(limits = {}) {
       this.limits = normalizeLimits(limits);
     }
@@ -1479,6 +1606,7 @@ ${canonicalJson(unsigned)}`))
       const program = assertRuntimeProgram(programInput);
       const state = this.newState();
       this.assertExecutableProgram(program, state);
+      this.resolveProgramScopes(program.ast);
       const root = new Environment();
       this.installBuiltins(root);
       this.predeclareFunctions(program.ast.body, root, state);
@@ -1488,6 +1616,35 @@ ${canonicalJson(unsigned)}`))
         if (error instanceof ReturnSignal) return;
         throw this.normalizeRuntimeError(error);
       }
+    }
+    resolveProgramScopes(ast) {
+      if (this.resolvedPrograms.has(ast)) return;
+      const resolution = resolveScopes(ast);
+      const collect = (statements) => {
+        for (const statement of statements) {
+          switch (statement.kind) {
+            case "VarDecl":
+              if (resolution.isReassignment(statement)) this.reassignments.add(statement);
+              break;
+            case "If":
+              collect(statement.thenBlock.body);
+              if (statement.elseBlock) collect(statement.elseBlock.body);
+              break;
+            case "Repeat":
+            case "FuncDef":
+            case "When":
+            case "WatchStmt":
+            case "EveryFrame":
+            case "ForIn":
+              collect(statement.body.body);
+              break;
+            default:
+              break;
+          }
+        }
+      };
+      collect(ast.body);
+      this.resolvedPrograms.add(ast);
     }
     newState() {
       return { limits: this.limits, steps: 0, loopIterations: 0, callDepth: 0 };
@@ -1598,9 +1755,15 @@ ${canonicalJson(unsigned)}`))
         }
         case "ImportDecl":
           throw new RuntimeExecutionError("RUNTIME_UNSUPPORTED_OPERATION", "\u8FD0\u884C\u65F6\u4E0D\u80FD\u6267\u884C import", statement.line);
-        case "VarDecl":
-          environment.define(statement.name, this.evaluate(statement.value, environment, state, host, statement.line));
+        case "VarDecl": {
+          const value = this.evaluate(statement.value, environment, state, host, statement.line);
+          if (this.reassignments.has(statement)) {
+            environment.assign(statement.name, value);
+          } else {
+            environment.define(statement.name, value);
+          }
           return;
+        }
         case "Assign":
           this.assign(statement.target, this.evaluate(statement.value, environment, state, host, statement.line), environment, state, host, statement.line);
           return;

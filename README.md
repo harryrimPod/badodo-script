@@ -146,13 +146,17 @@ npx --yes github:harryrimPod/badodo-script run examples/door.bds
 包含 `dist/`、示例及 `wabt` 的 Node 分发包；资产校验与重建步骤见
 [`docs/distribution.md`](docs/distribution.md)。
 
-也可全局安装：
+也可安装到项目中（推荐，版本写入 `package.json`）：
+
+> 说明：`badodo-script` 尚未发布到 npm 注册表，`npm install badodo-script` 目前会返回 404。下面的命令都直接从 GitHub 仓库安装（npm 会在安装时自动执行 `prepare` 构建 `dist/`），已在干净环境中实测。
 
 ```bash
-npm install --global badodo-script
-bds compile main.bds --strict --nodes button,door,rotor --target web --emit-types
-bds run main.bds --nodes button,door,rotor --target web
+npm install --save-dev github:harryrimPod/badodo-script
+npx bds compile main.bds --strict --nodes button,door,rotor --target web --emit-types
+npx bds run main.bds --nodes button,door,rotor --target web
 ```
+
+暂不支持 `npm install --global github:harryrimPod/badodo-script`：在 npm 10 下全局安装 git 依赖时构建步骤找不到 `tsc` 而失败。需要随处可用的命令时请使用 `npx --yes github:harryrimPod/badodo-script <命令>`。
 
 ### 安装依赖
 
@@ -181,10 +185,10 @@ npm run build
 node dist/cli.js compile examples/door.bds
 ```
 
-发布包也可独立安装，不要求调用方克隆源码：
+也可不克隆源码，直接从 GitHub 安装到项目中：
 
 ```bash
-npm install badodo-script
+npm install --save-dev github:harryrimPod/badodo-script
 npx badodo-script --version
 ```
 
@@ -255,11 +259,10 @@ npm run verify          # 构建并执行完整验证矩阵
 
 ### 编辑器与 LSP
 
-仓库提供 `bds-lsp` 标准输入/输出语言服务器，支持 initialize、文档诊断、completion、hover、shutdown/exit；`editors/vscode/` 提供 `.bds` 语言包骨架。全局安装后可将任意 LSP 客户端指向：
+仓库提供 `bds-lsp` 标准输入/输出语言服务器，支持 initialize、文档诊断、completion、hover、shutdown/exit；`editors/vscode/` 提供 `.bds` 语言包骨架。可将任意 LSP 客户端指向下面的命令（或项目安装后的 `npx bds-lsp`）：
 
 ```bash
-npm install --global badodo-script
-bds-lsp
+npx --yes -p github:harryrimPod/badodo-script bds-lsp
 ```
 
 ### Node API

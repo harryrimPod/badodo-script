@@ -22,7 +22,7 @@ GitHub Actions 在 CI 和发布工作流中使用 `npx playwright install --with
 npx --yes github:harryrimPod/badodo-script --version
 npx --yes github:harryrimPod/badodo-script init my-bds-project
 
-# 项目级安装（init 生成的 package.json 已依赖 github:harryrimPod/badodo-script）
+# 项目级安装（init 生成的 package.json 已依赖固定版本 github:harryrimPod/badodo-script#v<当前版本>）
 cd my-bds-project
 npm install
 npm run compile

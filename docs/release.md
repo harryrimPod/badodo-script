@@ -13,24 +13,22 @@ npm pack --dry-run
 
 GitHub Actions 在 CI 和发布工作流中使用 `npx playwright install --with-deps chromium`，因此真实 Babylon/MapLibre WebGL2 smoke 不会退化为 fake runtime 或静默跳过。
 
-## 下载与使用（npm 标准）
+## 下载与使用
 
-发布后，用户无需克隆仓库即可使用：
+`badodo-script` 尚未发布到 npm 注册表。在发布之前，用户无需克隆仓库，直接从 GitHub 安装：
 
 ```bash
 # 一次性运行，不写入全局环境
-npx badodo-script --version
-npx badodo-script init my-bds-project
+npx --yes github:harryrimPod/badodo-script --version
+npx --yes github:harryrimPod/badodo-script init my-bds-project
 
-# 项目级安装（推荐，版本写入 package.json）
+# 项目级安装（init 生成的 package.json 已依赖 github:harryrimPod/badodo-script）
 cd my-bds-project
 npm install
 npm run compile
-
-# 全局安装 CLI
-npm install --global badodo-script
-bds compile main.bds --strict --nodes button,door,rotor --target web --emit-types
 ```
+
+全局安装 git 依赖（`npm install --global github:...`）在 npm 10 下构建失败，暂不支持。npm 发布完成后再恢复 `npx badodo-script` / `npm install badodo-script` 写法。
 
 Node API 也可直接导入：
 

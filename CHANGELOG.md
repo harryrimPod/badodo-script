@@ -1,6 +1,9 @@
 # Changelog
 
-## Unreleased
+## 0.2.1 - 2026-10-28
+
+- Install from GitHub until the npm registry release: added a `prepare` script so `npx github:harryrimPod/badodo-script` and `npm install github:harryrimPod/badodo-script` build `dist/` on install; README/docs updated. Global install of the git dependency is not supported under npm 10.
+- `bds init` now pins `badodo-script` to `github:harryrimPod/badodo-script#v0.2.1` (was `^0.1.0`, which did not match the current version and does not exist on npm).
 
 - Fixed duplicate `let` in generated TypeScript: a variable is declared once per scope and later assignments are plain assignments (new `src/scope.ts`).
 - The structured executor applies the same rule, so assignments in nested blocks (`if`/`repeat`/`for`/`when`/`watch`/`every frame`) update the outer variable instead of creating a block-local copy. Function bodies remain a boundary. Rule documented in `docs/spec.md` 5.1.1.

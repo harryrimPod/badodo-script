@@ -237,8 +237,8 @@ function initProject(directory: string | undefined, force: boolean): void {
       name: path.basename(root).toLowerCase().replace(/[^a-z0-9._-]+/g, "-") || "badodo-project",
       private: true,
       scripts: { compile: "bds compile main.bds dist/main.ts --strict --nodes button,door,rotor --target web --emit-types" },
-      // Not published to npm yet: install from the GitHub repository (built by `prepare`).
-      devDependencies: { "badodo-script": "github:harryrimPod/badodo-script" },
+      // Not published to npm yet: install a pinned tag from GitHub (built by `prepare`). Bump with each release.
+      devDependencies: { "badodo-script": "github:harryrimPod/badodo-script#v0.2.1" },
     }, null, 2)}\n`,
     "README.md": [
       "# Badodo Script project",

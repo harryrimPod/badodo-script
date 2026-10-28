@@ -60,6 +60,10 @@ export class Lexer {
   }
 
   private handleNewline(): Token | null {
+    // A NEWLINE token belongs to the end of the line it terminates, so a
+    // diagnostic on it ("line ended here") points at that line.
+    const endLine = this.line;
+    const endCol = this.col;
     this.advance(); // consume \n
     this.line++;
     this.col = 1;
@@ -75,17 +79,22 @@ export class Lexer {
 
     if (indent > currentIndent) {
       this.indentStack.push(indent);
-      return this.makeToken(TokenType.INDENT, "");
+      return { ...this.makeToken(TokenType.INDENT, ""), indent: { expected: currentIndent, actual: indent } };
     }
 
     if (indent < currentIndent) {
       const dedents: Token[] = [];
+      const validLevels = [...this.indentStack];
       while (indent < this.indentStack[this.indentStack.length - 1]) {
         this.indentStack.pop();
         dedents.push(this.makeToken(TokenType.DEDENT, ""));
       }
       if (indent !== this.indentStack[this.indentStack.length - 1]) {
-        throw new LexerError("缩进不一致，请检查这一行的空格数量是否和上一行对齐", this.line, this.col);
+        throw new LexerError(
+          `缩进不一致：这一行应为 ${formatIndentLevels(validLevels)} 个空格，实际 ${indent} 个空格。请让它和上面某一层代码对齐`,
+          this.line,
+          this.col,
+        );
       }
       // Return first dedent, queue the rest
       if (dedents.length > 0) {
@@ -95,7 +104,7 @@ export class Lexer {
     }
 
     // Same indent level - emit newline
-    return this.makeToken(TokenType.NEWLINE, "");
+    return this.makeToken(TokenType.NEWLINE, "", endLine, endCol);
   }
 
   private findNextNonSpacePos(): number {
@@ -273,4 +282,10 @@ export class Lexer {
 
 export function tokenize(source: string): Token[] {
   return new Lexer(source).tokenize();
+}
+
+function formatIndentLevels(levels: readonly number[]): string {
+  const unique = [...new Set(levels)].sort((a, b) => a - b);
+  if (unique.length <= 1) return String(unique[0] ?? 0);
+  return `${unique.slice(0, -1).join("、")} 或 ${unique[unique.length - 1]}`;
 }

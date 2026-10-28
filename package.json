@@ -86,7 +86,7 @@
     "test:browser": "node scripts/browser-smoke.mjs",
     "test:maplibre-browser": "node scripts/maplibre-browser-smoke.mjs",
     "typecheck": "tsc --noEmit",
-    "verify": "npm run build && npm run bundle:all && npm run test:examples && npm run test:browser && npm run test:maplibre-browser && npm test && npm run test:runtime && npm run test:stdlib && npm run test:lsp && npm run test:lsp-protocol && npm run test:godot && npm run test:godot-dotnet && npm run test:wasm && npm run test:conformance && npm run test:types && npm run test:shared && npm run test:shared-rc && npm run test:shared-csharp && npm run test:shared-csharp-dotnet && npm run test:ingress && npm run test:server && npm run test:server-http && npm run test:server-http-go && npm run test:server-mqtt && npm run test:server-mqtt-go && npm run test:expressions && npm run test:strict && npm run test:typed-ts && npm run test:language-ga && npm run test:production && npm run test:licensing && npm run test:cli-sign && npm run test:cli-run && npm run test:package && npm run test:perf",
+    "verify": "npm run build && npm run bundle:all && npm run test:examples && npm run test:browser && npm run test:maplibre-browser && npm test && npm run test:runtime && npm run test:stdlib && npm run test:lsp && npm run test:lsp-protocol && npm run test:godot && npm run test:godot-dotnet && npm run test:wasm && npm run test:conformance && npm run test:types && npm run test:shared && npm run test:shared-rc && npm run test:shared-csharp && npm run test:shared-csharp-dotnet && npm run test:ingress && npm run test:server && npm run test:server-http && npm run test:server-http-go && npm run test:server-mqtt && npm run test:server-mqtt-go && npm run test:expressions && npm run test:strict && npm run test:typed-ts && npm run test:language-ga && npm run test:production && npm run test:licensing && npm run test:cli-sign && npm run test:cli-run && npm run test:scope && npm run test:indent-diagnostics && npm run test:generated-ts && npm run test:differential && npm run test:package && npm run test:perf",
     "prepare": "npm run build",
     "prepack": "npm run build",
     "compile": "node dist/cli.js",
@@ -98,7 +98,11 @@
     "demo": "npm run build && npm run bundle && node dist/cli.js pack demo/demo.bds -k my-secret-key-2026",
     "demo:maplibre": "npm run build && npm run bundle:maplibre && node dist/cli.js pack demo-maplibre/map.bds -k my-secret-key-2026",
     "demo:editor": "npm run build && npm run bundle:editor",
-    "test:wasm": "node dist/wasm-test.js"
+    "test:wasm": "node dist/wasm-test.js",
+    "test:scope": "node dist/scope-test.js",
+    "test:indent-diagnostics": "node dist/indent-diagnostics-test.js",
+    "test:generated-ts": "node scripts/verify-generated-ts.mjs",
+    "test:differential": "node scripts/differential-smoke.mjs"
   },
   "devDependencies": {
     "@babylonjs/core": "9.20.0",

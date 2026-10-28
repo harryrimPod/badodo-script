@@ -66,6 +66,8 @@ export interface Token {
   value: string;
   line: number;
   col: number;
+  /** INDENT only: indentation width (spaces, tab = 4) of the enclosing block and of this line. */
+  indent?: { expected: number; actual: number };
 }
 
 const KEYWORDS: Record<string, TokenType> = {

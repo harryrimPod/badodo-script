@@ -1,5 +1,6 @@
 import * as AST from "./ast";
 import { Mapping } from "./sourcemap";
+import { resolveScopes, ScopeResolution } from "./scope";
 
 export interface TypeScriptGeneratorOptions {
   /** Emit TypeScript annotations for the BDS annotations that have a safe projection. */
@@ -11,6 +12,7 @@ export class TypeScriptGenerator {
   private output = "";
   private mappings: Mapping[] = [];
   private knownTypes = new Set<string>();
+  private scopes: ScopeResolution | null = null;
   private readonly options: Required<TypeScriptGeneratorOptions>;
 
   constructor(options: TypeScriptGeneratorOptions = {}) {
@@ -20,6 +22,7 @@ export class TypeScriptGenerator {
   generate(node: AST.Program): string {
     this.output = "";
     this.mappings = [];
+    this.scopes = resolveScopes(node);
     this.knownTypes = new Set(node.body.filter((stmt): stmt is AST.TypeDecl | AST.EnumDecl | AST.SharedDecl => stmt.kind === "TypeDecl" || stmt.kind === "EnumDecl" || stmt.kind === "SharedDecl").map((stmt) => stmt.name));
     for (const stmt of node.body) {
       this.writeStmt(stmt);
@@ -72,6 +75,10 @@ export class TypeScriptGenerator {
         break;
       }
       case "VarDecl":
+        if (this.scopes?.isReassignment(stmt)) {
+          this.output += `${stmt.name} = ${this.writeExpr(stmt.value)};`;
+          break;
+        }
         this.output += `let ${stmt.name}${this.writeTypeAnnotation(stmt.typeAnnotation)} = ${this.writeExpr(stmt.value)};`;
         break;
       case "Assign":
@@ -177,7 +184,8 @@ export class TypeScriptGenerator {
       }
       case "ForIn": {
         const iterable = this.writeExpr(stmt.iterable);
-        this.output += `for (const ${stmt.item} of ${iterable}) {\n`;
+        const binding = this.scopes?.isLoopItemReassigned(stmt) ? "let" : "const";
+        this.output += `for (${binding} ${stmt.item} of ${iterable}) {\n`;
         this.indentLevel++;
         this.writeBlock(stmt.body);
         this.indentLevel--;

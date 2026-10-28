@@ -364,7 +364,7 @@ export class Parser {
         this.skipNewlines();
       }
 
-      this.consume(TokenType.DEDENT, "Expected end of block");
+      this.consume(TokenType.DEDENT, "代码块需要在这里结束：请把下一行的缩进退回到上一层");
     } finally {
       this.blockDepth--;
     }
@@ -456,7 +456,7 @@ export class Parser {
       case TokenType.IDENT:
         return this.parsePostfix();
       default:
-        throw new ParseError(`这里无法理解「${token.value}」。可以写数字、文本、true/false，或者一个名字`, token);
+        throw new ParseError(describeUnexpectedToken(token), token);
     }
     return this.parsePostfixTail(expr);
   }
@@ -600,4 +600,24 @@ export class Parser {
 
 export function parse(tokens: Token[]): AST.Program {
   return new Parser(tokens).parse();
+}
+
+/** Readable message for a token that cannot start an expression; never shows an empty 「」. */
+function describeUnexpectedToken(token: Token): string {
+  switch (token.type) {
+    case TokenType.INDENT: {
+      const widths = token.indent ? `应为 ${token.indent.expected} 个空格，实际 ${token.indent.actual} 个空格。` : "";
+      return `这一行的缩进比上一行多：${widths}只有以冒号 : 结尾的行（例如 if、when、func）后面才能增加缩进`;
+    }
+    case TokenType.DEDENT:
+      return "代码块在这里结束了，但上一行还没有写完。请检查上一行是否缺少内容";
+    case TokenType.NEWLINE:
+      return "这一行在这里提前结束了（行尾），后面还需要一个值。可以写数字、文本、true/false，或者一个名字";
+    case TokenType.EOF:
+      return "代码在这里结束了（文件结尾），后面还需要一个值。可以写数字、文本、true/false，或者一个名字";
+    default:
+      return token.value
+        ? `这里无法理解「${token.value}」。可以写数字、文本、true/false，或者一个名字`
+        : "这里无法理解。可以写数字、文本、true/false，或者一个名字";
+  }
 }

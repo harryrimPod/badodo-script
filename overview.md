@@ -146,16 +146,16 @@ await Badodo.runEncrypted(rt, "./demo.bds.bin", "a-production-key-at-least-16-ch
 
 ### 发布包使用
 
-像 Python 的 `pip install` 一样，BDS 以 npm 包形式分发：
+像 Python 的 `pip install` 一样，BDS 以 npm 包形式分发。npm 注册表尚未发布，目前从 GitHub 仓库安装：
 
 ```bash
-npx badodo-script init my-bds-project
+npx --yes github:harryrimPod/badodo-script init my-bds-project
 cd my-bds-project
 npm install
 npm run compile
 ```
 
-全局 CLI 使用 `npm install --global badodo-script`，Node API 使用 `require("badodo-script")` 或 `import { compile } from "badodo-script"`。`npm run test:package` 在隔离临时目录中验证 tarball、API、CLI、脚手架和实际编译链。
+项目内使用 `npx bds ...`（全局安装 git 依赖暂不支持），Node API 使用 `require("badodo-script")` 或 `import { compile } from "badodo-script"`。`npm run test:package` 在隔离临时目录中验证 tarball、API、CLI、脚手架和实际编译链。
 
 ```bash
 cd E:\AI_WORK\dodoscript

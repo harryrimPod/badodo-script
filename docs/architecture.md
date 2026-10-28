@@ -220,15 +220,16 @@ prototype、Proxy、reflection、unsafe、dynamic、复杂泛型、goroutine/cha
 
 ## 12. 分发与使用标准
 
-BDS 的交付单位是标准 npm package，而不是要求用户克隆源码的工作区：
+BDS 的交付单位是标准 npm package，而不是要求用户克隆源码的工作区。npm 注册表发布尚未进行，目前从 GitHub 仓库安装（安装时由 `prepare` 构建 `dist/`）：
 
 ```text
-npx badodo-script        → 一次性 CLI
-npm install badodo-script → 项目级 API + CLI
-npm install --global badodo-script → 全局 bds 命令
+npx github:harryrimPod/badodo-script                       → 一次性 CLI
+npm install --save-dev github:harryrimPod/badodo-script    → 项目级 API + CLI
 ```
 
-`package.json` 暴露 CommonJS/TypeScript API、双 CLI bin、Node.js 版本约束和显式运行时依赖；`bds init` 生成最小可编译项目，`bds doctor` 检查安装；`npm run test:package` 在隔离目录中验证打包、安装、API、CLI、脚手架和实际编译。发布由手动触发的 npm provenance workflow 完成。
+全局安装 git 依赖在 npm 10 下构建失败，暂不支持。
+
+`package.json` 暴露 CommonJS/TypeScript API、双 CLI bin、Node.js 版本约束和显式运行时依赖；`bds init` 生成最小可编译项目，`bds doctor` 检查安装；`npm run test:package` 在隔离目录中验证打包、安装、API、CLI、脚手架和实际编译。npm 发布 workflow（手动触发，npm provenance）已存在，但尚未执行。
 
 ## 13. GA-100 状态
 
